@@ -1,0 +1,14 @@
+{
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Spring Boot-CxatApplication<cxat>",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "mainClass": "com.chat.cxat.CxatApplication",
+            "projectName": "cxat",
+            "args": "",
+            "envFile": "${workspaceFolder}/.env"
+        }
+    ]
+}

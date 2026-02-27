@@ -1,0 +1,17 @@
+PS C:\Users\anket> docker ps -a
+CONTAINER ID   IMAGE     COMMAND   CREATED   STATUS    PORTS     NAMES
+PS C:\Users\anket> docker run -d --name cxat-mongo -p 27017:27017 mongo:6
+2fd69523669197a5a18dcedad1ca567fdecf8eed6b4c72d13bc6b7a105a5a3e0
+PS C:\Users\anket> docker run -d --name cxat-redis -p 6379:6379 redis
+cb54550a09d23b449379b31abebc6d66ef1d8e4fc75046fa32db3d22d6780d57
+
+//docker start cxat-mongo cxat-redis
+
+
+
+PS C:\Users\anket>  docker exec -it cxat-redis redis-cli
+127.0.0.1:6379>
+PS C:\Users\anket>  docker exec -it cxat-mongo mongosh
+Current Mongosh Log ID: 69a1efd9951166c8118de665
+
+use redis and mongosh

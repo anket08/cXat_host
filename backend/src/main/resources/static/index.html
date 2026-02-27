@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus Chats</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <div class="container">
+        <!-- Login/Register Section -->
+        <div id="auth-section">
+            <h2>Nexus Chats</h2>
+            <div class="form-group">
+                <label for="username">Username:</label>
+                <input type="text" id="username" placeholder="Enter username">
+            </div>
+            <div class="form-group">
+                <label for="email">Email:</label>
+                <input type="email" id="email" placeholder="Enter email">
+            </div>
+             <div class="form-group">
+                <label for="password">Password:</label>
+                <input type="password" id="password" placeholder="Enter password">
+            </div>
+            <button onclick="register()">Register</button>
+            <button onclick="login()">Login</button>
+            <p id="auth-message"></p>
+        </div>
+
+        <!-- Chat Section -->
+        <div id="chat-section" class="hidden">
+            <div class="chat-header">
+                <h3 id="user-display"></h3>
+                <button onclick="logout()">Logout</button>
+            </div>
+            
+            <div class="chat-container">
+                <!-- User List / Chat Selection -->
+                <div class="user-list">
+                    <h4>Start Chat</h4>
+                    <input type="text" id="recipient-input" placeholder="Recipient's Username">
+                    <button onclick="startChat()">Open Chat</button>
+                     <p id="current-chat-with">Not chatting</p>
+                </div>
+
+                <!-- Messages Area -->
+                <div class="message-area">
+                    <div id="messages" class="messages-list"></div>
+                    <div class="input-area">
+                        <input type="text" id="message-content" placeholder="Type a message...">
+                        <button onclick="sendMessage()">Send</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.6.1/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>

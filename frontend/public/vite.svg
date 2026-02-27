@@ -1,0 +1,31 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  
+  <!-- Background (optional) -->
+  <rect width="100%" height="100%" fill="#020814"/>
+
+  <!-- Large Circle -->
+  <circle cx="80" cy="120" r="50"
+          fill="none"
+          stroke="#79B9F2"
+          stroke-width="10"
+          stroke-linecap="round"/>
+
+  <!-- Small Circle Top -->
+  <circle cx="110" cy="40" r="18"
+          fill="none"
+          stroke="#79B9F2"
+          stroke-width="8"/>
+
+  <!-- Small Circle Right -->
+  <circle cx="160" cy="80" r="18"
+          fill="none"
+          stroke="#79B9F2"
+          stroke-width="8"/>
+
+  <!-- Small Circle Bottom Right -->
+  <circle cx="165" cy="140" r="18"
+          fill="none"
+          stroke="#79B9F2"
+          stroke-width="8"/>
+
+</svg>

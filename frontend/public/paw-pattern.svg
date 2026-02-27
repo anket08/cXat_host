@@ -1,0 +1,169 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      @keyframes float-1 {
+        0%, 100% { transform: translate(0px, 0px) rotate(0deg); }
+        50% { transform: translate(15px, -10px) rotate(5deg); }
+      }
+      @keyframes float-2 {
+        0%, 100% { transform: translate(0px, 0px) rotate(0deg); }
+        50% { transform: translate(-12px, -15px) rotate(-8deg); }
+      }
+      @keyframes float-3 {
+        0%, 100% { transform: translate(0px, 0px) rotate(0deg); }
+        50% { transform: translate(-10px, 15px) rotate(6deg); }
+      }
+      @keyframes float-4 {
+        0%, 100% { transform: translate(0px, 0px) rotate(0deg); }
+        50% { transform: translate(18px, 12px) rotate(-5deg); }
+      }
+      
+      .g1 { animation: float-1 25s ease-in-out infinite; }
+      .g2 { animation: float-2 30s ease-in-out infinite; }
+      .g3 { animation: float-3 28s ease-in-out infinite; }
+      .g4 { animation: float-4 35s ease-in-out infinite; }
+    </style>
+  </defs>
+
+  <!-- Ultra dense background paws pattern with individual movement -->
+  
+  <!-- Group 1 -->
+  <g class="g1">
+    <g transform="translate(20, 30) scale(0.6) rotate(15)" opacity="0.12" stroke="#ffffff" stroke-width="3" fill="none">
+      <path d="M12,12 c-2.2-2.2-6.5-1.5-7.5,1 c-1,2.5,1,6,3.5,7 c2.5,1,6.5-0.5,7.5-3 C16.5,14.5,14.2,14.2,12,12z"/>
+      <circle cx="5" cy="8" r="2.5" />
+      <circle cx="10" cy="4" r="2.5" />
+      <circle cx="16" cy="5" r="2.5" />
+      <circle cx="19" cy="10" r="2.5" />
+    </g>
+    <g transform="translate(130, 40) scale(0.4) rotate(-25)" opacity="0.10" fill="#ffffff">
+      <path d="M12,12 c-2.2-2.2-6.5-1.5-7.5,1 c-1,2.5,1,6,3.5,7 c2.5,1,6.5-0.5,7.5-3 C16.5,14.5,14.2,14.2,12,12z"/>
+      <circle cx="5" cy="8" r="3" />
+      <circle cx="10" cy="4" r="3" />
+      <circle cx="16" cy="5" r="3" />
+      <circle cx="19" cy="10" r="3" />
+    </g>
+  </g>
+
+  <g class="g2">
+    <g transform="translate(70, 110) scale(0.8) rotate(45)" opacity="0.08" stroke="#ffffff" stroke-width="2" fill="none" stroke-dasharray="4 2">
+      <path d="M12,12 c-2.2-2.2-6.5-1.5-7.5,1 c-1,2.5,1,6,3.5,7 c2.5,1,6.5-0.5,7.5-3 C16.5,14.5,14.2,14.2,12,12z"/>
+      <circle cx="5" cy="8" r="2" />
+      <circle cx="10" cy="4" r="2" />
+      <circle cx="16" cy="5" r="2" />
+      <circle cx="19" cy="10" r="2" />
+    </g>
+    <!-- Group 2 -->
+    <g transform="translate(160, 150) scale(0.35) rotate(-10)" opacity="0.12" fill="#ffffff">
+      <path d="M12,12 c-2.2-2.2-6.5-1.5-7.5,1 c-1,2.5,1,6,3.5,7 c2.5,1,6.5-0.5,7.5-3 C16.5,14.5,14.2,14.2,12,12z"/>
+      <circle cx="5" cy="8" r="3" />
+      <circle cx="10" cy="4" r="3" />
+      <circle cx="16" cy="5" r="3" />
+      <circle cx="19" cy="10" r="3" />
+    </g>
+  </g>
+
+  <g class="g3">
+    <g transform="translate(30, 160) scale(0.5) rotate(70)" opacity="0.10" stroke="#ffffff" stroke-width="4" fill="none">
+      <path d="M12,12 c-2.2-2.2-6.5-1.5-7.5,1 c-1,2.5,1,6,3.5,7 c2.5,1,6.5-0.5,7.5-3 C16.5,14.5,14.2,14.2,12,12z"/>
+      <circle cx="5" cy="8" r="1.5" />
+      <circle cx="10" cy="4" r="1.5" />
+      <circle cx="16" cy="5" r="1.5" />
+      <circle cx="19" cy="10" r="1.5" />
+    </g>
+    <g transform="translate(100, 70) scale(0.45) rotate(-60)" opacity="0.08" stroke="#79c0ff" stroke-width="3" fill="none">
+      <path d="M12,12 c-2.2-2.2-6.5-1.5-7.5,1 c-1,2.5,1,6,3.5,7 c2.5,1,6.5-0.5,7.5-3 C16.5,14.5,14.2,14.2,12,12z"/>
+      <circle cx="5" cy="8" r="2.5" />
+      <circle cx="10" cy="4" r="2.5" />
+      <circle cx="16" cy="5" r="2.5" />
+      <circle cx="19" cy="10" r="2.5" />
+    </g>
+  </g>
+
+  <g class="g4">
+    <!-- Group 3 (Extra Density) -->
+    <g transform="translate(180, 80) scale(0.55) rotate(110)" opacity="0.10" stroke="#ffffff" stroke-width="2" fill="none">
+      <path d="M12,12 c-2.2-2.2-6.5-1.5-7.5,1 c-1,2.5,1,6,3.5,7 c2.5,1,6.5-0.5,7.5-3 C16.5,14.5,14.2,14.2,12,12z"/>
+      <circle cx="5" cy="8" r="2" />
+      <circle cx="10" cy="4" r="2" />
+      <circle cx="16" cy="5" r="2" />
+      <circle cx="19" cy="10" r="2" />
+    </g>
+    <g transform="translate(60, 10) scale(0.35) rotate(-45)" opacity="0.12" fill="#79c0ff">
+      <path d="M12,12 c-2.2-2.2-6.5-1.5-7.5,1 c-1,2.5,1,6,3.5,7 c2.5,1,6.5-0.5,7.5-3 C16.5,14.5,14.2,14.2,12,12z"/>
+      <circle cx="5" cy="8" r="3" />
+      <circle cx="10" cy="4" r="3" />
+      <circle cx="16" cy="5" r="3" />
+      <circle cx="19" cy="10" r="3" />
+    </g>
+  </g>
+
+  <g class="g1">
+    <g transform="translate(140, 180) scale(0.6) rotate(15)" opacity="0.08" stroke="#ffffff" stroke-width="3" fill="none">
+      <path d="M12,12 c-2.2-2.2-6.5-1.5-7.5,1 c-1,2.5,1,6,3.5,7 c2.5,1,6.5-0.5,7.5-3 C16.5,14.5,14.2,14.2,12,12z"/>
+      <circle cx="5" cy="8" r="2.5" />
+      <circle cx="10" cy="4" r="2.5" />
+      <circle cx="16" cy="5" r="2.5" />
+      <circle cx="19" cy="10" r="2.5" />
+    </g>
+    <!-- Group 4 (Maximum Density) -->
+    <g transform="translate(10, 100) scale(0.4) rotate(-135)" opacity="0.10" fill="#ffffff">
+      <path d="M12,12 c-2.2-2.2-6.5-1.5-7.5,1 c-1,2.5,1,6,3.5,7 c2.5,1,6.5-0.5,7.5-3 C16.5,14.5,14.2,14.2,12,12z"/>
+      <circle cx="5" cy="8" r="2.5" />
+      <circle cx="10" cy="4" r="2.5" />
+      <circle cx="16" cy="5" r="2.5" />
+      <circle cx="19" cy="10" r="2.5" />
+    </g>
+  </g>
+
+  <g class="g2">
+    <g transform="translate(90, 170) scale(0.3) rotate(85)" opacity="0.12" fill="#79c0ff">
+      <path d="M12,12 c-2.2-2.2-6.5-1.5-7.5,1 c-1,2.5,1,6,3.5,7 c2.5,1,6.5-0.5,7.5-3 C16.5,14.5,14.2,14.2,12,12z"/>
+      <circle cx="5" cy="8" r="3" />
+      <circle cx="10" cy="4" r="3" />
+      <circle cx="16" cy="5" r="3" />
+      <circle cx="19" cy="10" r="3" />
+    </g>
+    <g transform="translate(150, 100) scale(0.45) rotate(-30)" opacity="0.09" stroke="#ffffff" stroke-width="2" fill="none">
+      <path d="M12,12 c-2.2-2.2-6.5-1.5-7.5,1 c-1,2.5,1,6,3.5,7 c2.5,1,6.5-0.5,7.5-3 C16.5,14.5,14.2,14.2,12,12z"/>
+      <circle cx="5" cy="8" r="2.5" />
+      <circle cx="10" cy="4" r="2.5" />
+      <circle cx="16" cy="5" r="2.5" />
+      <circle cx="19" cy="10" r="2.5" />
+    </g>
+  </g>
+
+  <g class="g3">
+    <g transform="translate(50, 60) scale(0.5) rotate(165)" opacity="0.08" stroke="#d2a8ff" stroke-width="3" fill="none">
+      <path d="M12,12 c-2.2-2.2-6.5-1.5-7.5,1 c-1,2.5,1,6,3.5,7 c2.5,1,6.5-0.5,7.5-3 C16.5,14.5,14.2,14.2,12,12z"/>
+      <circle cx="5" cy="8" r="2.5" />
+      <circle cx="10" cy="4" r="2.5" />
+      <circle cx="16" cy="5" r="2.5" />
+      <circle cx="19" cy="10" r="2.5" />
+    </g>
+    <g transform="translate(190, 20) scale(0.35) rotate(-85)" opacity="0.11" fill="#ffffff">
+      <path d="M12,12 c-2.2-2.2-6.5-1.5-7.5,1 c-1,2.5,1,6,3.5,7 c2.5,1,6.5-0.5,7.5-3 C16.5,14.5,14.2,14.2,12,12z"/>
+      <circle cx="5" cy="8" r="3" />
+      <circle cx="10" cy="4" r="3" />
+      <circle cx="16" cy="5" r="3" />
+      <circle cx="19" cy="10" r="3" />
+    </g>
+  </g>
+
+  <g class="g4">
+    <g transform="translate(10, 190) scale(0.4) rotate(45)" opacity="0.08" stroke="#79c0ff" stroke-width="2" fill="none">
+      <path d="M12,12 c-2.2-2.2-6.5-1.5-7.5,1 c-1,2.5,1,6,3.5,7 c2.5,1,6.5-0.5,7.5-3 C16.5,14.5,14.2,14.2,12,12z"/>
+      <circle cx="5" cy="8" r="2.5" />
+      <circle cx="10" cy="4" r="2.5" />
+      <circle cx="16" cy="5" r="2.5" />
+      <circle cx="19" cy="10" r="2.5" />
+    </g>
+    <g transform="translate(110, 20) scale(0.25) rotate(-15)" opacity="0.10" fill="#ffffff">
+      <path d="M12,12 c-2.2-2.2-6.5-1.5-7.5,1 c-1,2.5,1,6,3.5,7 c2.5,1,6.5-0.5,7.5-3 C16.5,14.5,14.2,14.2,12,12z"/>
+      <circle cx="5" cy="8" r="3" />
+      <circle cx="10" cy="4" r="3" />
+      <circle cx="16" cy="5" r="3" />
+      <circle cx="19" cy="10" r="3" />
+    </g>
+  </g>
+</svg>
