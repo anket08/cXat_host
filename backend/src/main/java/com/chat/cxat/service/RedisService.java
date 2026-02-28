@@ -22,28 +22,34 @@ public class RedisService {
     // ==========================
 
     public void setUserOnline(String username) {
-
-        String key = "online:" + username;
-
-        redisTemplate.opsForValue().set(
-                key,
-                "true",
-                300,
-                TimeUnit.SECONDS);
+        try {
+            String key = "online:" + username;
+            redisTemplate.opsForValue().set(
+                    key,
+                    "true",
+                    300,
+                    TimeUnit.SECONDS);
+        } catch (Exception e) {
+            System.out.println("Redis SET online error: " + e.getMessage());
+        }
     }
 
     public void setUserOffline(String username) {
-
-        redisTemplate.delete(
-                "online:" + username);
+        try {
+            redisTemplate.delete("online:" + username);
+        } catch (Exception e) {
+            System.out.println("Redis DELETE online error: " + e.getMessage());
+        }
     }
 
     public boolean isUserOnline(String username) {
-
-        Boolean exists = redisTemplate.hasKey(
-                "online:" + username);
-
-        return exists != null && exists;
+        try {
+            Boolean exists = redisTemplate.hasKey("online:" + username);
+            return exists != null && exists;
+        } catch (Exception e) {
+            System.out.println("Redis HASKEY online error: " + e.getMessage());
+            return false;
+        }
     }
 
     // ==========================

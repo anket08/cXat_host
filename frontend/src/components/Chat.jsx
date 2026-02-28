@@ -58,7 +58,7 @@ const Chat = ({ user, activeRoom: propActiveRoom, onLeaveRoom }) => {
                     return [...prev, message];
                 });
 
-                const isMe = String(message.senderId) === String(user.id) || String(message.senderId) === String(user.username);
+                const isMe = String(message.senderId) === String(user.id);
                 if (!isMe) {
                     client.send("/app/read", {}, JSON.stringify({ roomId: activeRoom, userId: user.id }));
                 }
@@ -82,7 +82,7 @@ const Chat = ({ user, activeRoom: propActiveRoom, onLeaveRoom }) => {
                 setMessages(res.data);
 
                 const hasUnreadFromOthers = res.data.some(m => {
-                    const isMe = String(m.senderId) === String(user.id) || String(m.senderId) === String(user.username);
+                    const isMe = String(m.senderId) === String(user.id);
                     return !m.read && !isMe;
                 });
                 if (hasUnreadFromOthers && stompClientRef.current?.connected) {
@@ -93,8 +93,13 @@ const Chat = ({ user, activeRoom: propActiveRoom, onLeaveRoom }) => {
     };
 
     const sendMessage = () => {
-        if (!input.trim() || !isConnected) return;
-        const payload = { roomId: activeRoom, senderId: user.username, content: input.trim() };
+        console.log("SEND_MESSAGE_TRIGGERED", { input: input.trim(), isConnected });
+        if (!input.trim() || !isConnected) {
+            console.log("SEND_MESSAGE_BLOCKED", { emptyInput: !input.trim(), notConnected: !isConnected });
+            return;
+        }
+        const payload = { roomId: activeRoom, senderId: user.id, content: input.trim() };
+        console.log("SEND PAYLOAD:", payload);
         stompClientRef.current.send("/app/chat", {}, JSON.stringify(payload));
         setInput("");
     };
@@ -168,7 +173,7 @@ const Chat = ({ user, activeRoom: propActiveRoom, onLeaveRoom }) => {
 
                 <AnimatePresence>
                     {messages.map((msg, idx) => {
-                        const isMe = String(msg.senderId) === String(user.id) || String(msg.senderId) === String(user.username);
+                        const isMe = String(msg.senderId) === String(user.id);
                         return (
                             <motion.div
                                 key={msg.id || idx}

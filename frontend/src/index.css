@@ -74,6 +74,27 @@ select {
   background: linear-gradient(to bottom, transparent, #a5d6ff, #e2c5ff);
 }
 
+@media (min-width: 1024px) {
+  .lobby-container {
+    flex-direction: row !important;
+    align-items: flex-start;
+    padding: 0 4% !important;
+    max-width: 1600px;
+    margin: 0 auto;
+    gap: 4rem !important;
+  }
+
+  .lobby-sidebar {
+    position: sticky;
+    top: 100px;
+    height: calc(100vh - 180px);
+    max-height: none;
+    margin: 0;
+    flex-shrink: 0;
+    width: 320px !important;
+  }
+}
+
 /* Global Navbar */
 .global-navbar {
   position: fixed;
