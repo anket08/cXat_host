@@ -9,13 +9,31 @@ import org.springframework.stereotype.Service;
 @Service
 public class MailService {
 
-    @Value("${RESEND_API_KEY}")
-    private String apiKey;
+    /*
+     =========================
+     RESEND API KEY
+     =========================
+     */
 
+   @Value("${resend.api.key}")
+private String apiKey;
+
+
+    /*
+     =========================
+     SENDER EMAIL
+     =========================
+     */
 
     private static final String FROM =
-            "CXAT <onboarding@resend.dev>";
+        "onboarding@resend.dev";
 
+
+    /*
+     =========================
+     HTTP CLIENT
+     =========================
+     */
 
     private final OkHttpClient client =
             new OkHttpClient();
@@ -79,15 +97,10 @@ public class MailService {
         String html =
 
                 "Welcome to CXAT!<br><br>"
-
                 +"Username: "+username+"<br>"
-
                 +"User ID: "+userId+"<br><br>"
-
                 +"Enjoy chatting!<br><br>"
-
                 +"CXAT Team";
-
 
         sendEmail(
                 email,
@@ -98,10 +111,9 @@ public class MailService {
 
 
 
-
     /*
      =========================
-     CORE MAIL METHOD
+     CORE EMAIL METHOD
      =========================
      */
 
@@ -112,9 +124,10 @@ public class MailService {
 
         try{
 
-            String json =
+            // Debug API Key
+            System.out.println("API KEY = " + apiKey);
 
-                    "{"
+            String json = "{"
                     +"\"from\":\""+FROM+"\","
                     +"\"to\":[\""+email+"\"],"
                     +"\"subject\":\""+subject+"\","
@@ -122,38 +135,26 @@ public class MailService {
                     +"}";
 
 
-
             RequestBody body =
                     RequestBody.create(
                             json,
-                            MediaType.parse(
-                                    "application/json"
-                            )
+                            MediaType.get("application/json")
                     );
-
 
 
             Request request =
                     new Request.Builder()
-
-                            .url(
-                                    "https://api.resend.com/emails"
-                            )
-
+                            .url("https://api.resend.com/emails")
                             .post(body)
-
                             .addHeader(
                                     "Authorization",
                                     "Bearer "+apiKey
                             )
-
                             .addHeader(
                                     "Content-Type",
                                     "application/json"
                             )
-
                             .build();
-
 
 
             Response response =
@@ -162,20 +163,30 @@ public class MailService {
 
 
             System.out.println(
-                    "MAIL STATUS: "
-                            + response.code()
+                    "MAIL STATUS = "
+                    + response.code()
             );
+
+
+            String respBody =
+                    response.body()
+                            .string();
+
+            System.out.println(
+                    "MAIL RESPONSE = "
+                    + respBody
+            );
+
 
             response.close();
 
 
         }
-
         catch(Exception e){
 
             System.out.println(
-                    "MAIL ERROR: "
-                            +e.getMessage()
+                    "MAIL ERROR = "
+                    + e.getMessage()
             );
 
         }
