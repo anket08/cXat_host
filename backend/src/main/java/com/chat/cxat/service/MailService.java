@@ -1,78 +1,51 @@
 package com.chat.cxat.service;
 
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
+import okhttp3.*;
+
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 @Service
 public class MailService {
 
-    private final JavaMailSender mailSender;
+    @Value("${RESEND_API_KEY}")
+    private String apiKey;
 
-    public MailService(JavaMailSender mailSender) {
-        this.mailSender = mailSender;
-    }
+
+    private static final String FROM =
+            "CXAT <onboarding@resend.dev>";
+
+
+    private final OkHttpClient client =
+            new OkHttpClient();
+
+
 
     /*
      =========================
-     SEND RESET OTP
+     RESET OTP
      =========================
      */
 
     @Async
-    public void sendResetCode(String email,String code){
+    public void sendResetCode(
+            String email,
+            String code){
 
-        try{
-
-            SimpleMailMessage mail =
-                    new SimpleMailMessage();
-
-            mail.setFrom("cxat.app@gmail.com");
-
-            mail.setReplyTo("cxat.app@gmail.com");
-
-            mail.setTo(email);
-
-            mail.setSubject(
-                    "CXAT Password Reset Code"
-            );
-
-            mail.setText(
-
-                    "Your CXAT password reset code:\n\n"
-
-                    + code +
-
-                    "\n\nValid for 10 minutes.\n\n"
-
-                    + "CXAT Team"
-
-            );
-
-            mailSender.send(mail);
-
-            System.out.println(
-                    "RESET MAIL SENT"
-            );
-
-        }
-
-        catch(Exception e){
-
-            System.out.println(
-                    "RESET MAIL ERROR: "
-                            + e.getMessage()
-            );
-        }
-
+        sendEmail(
+                email,
+                "CXAT Password Reset Code",
+                "Your OTP: <b>"+code+
+                "</b><br><br>Valid for 10 minutes."
+        );
     }
 
 
 
     /*
      =========================
-     SEND REGISTER OTP
+     REGISTER OTP
      =========================
      */
 
@@ -81,56 +54,19 @@ public class MailService {
             String email,
             String code){
 
-        try{
-
-            SimpleMailMessage mail =
-                    new SimpleMailMessage();
-
-            mail.setFrom("cxat.app@gmail.com");
-
-            mail.setReplyTo("cxat.app@gmail.com");
-
-            mail.setTo(email);
-
-            mail.setSubject(
-                    "CXAT Email Verification OTP"
-            );
-
-            mail.setText(
-
-                    "Your CXAT verification code:\n\n"
-
-                    + code +
-
-                    "\n\nValid for 10 minutes.\n\n"
-
-                    + "CXAT Team"
-
-            );
-
-            mailSender.send(mail);
-
-            System.out.println(
-                    "REGISTER OTP SENT"
-            );
-
-        }
-
-        catch(Exception e){
-
-            System.out.println(
-                    "REGISTER OTP ERROR: "
-                            + e.getMessage()
-            );
-        }
-
+        sendEmail(
+                email,
+                "CXAT Verification OTP",
+                "Your OTP: <b>"+code+
+                "</b><br><br>Valid for 10 minutes."
+        );
     }
 
 
 
     /*
      =========================
-     SEND WELCOME MAIL
+     WELCOME MAIL
      =========================
      */
 
@@ -140,57 +76,108 @@ public class MailService {
             String username,
             String userId){
 
+        String html =
+
+                "Welcome to CXAT!<br><br>"
+
+                +"Username: "+username+"<br>"
+
+                +"User ID: "+userId+"<br><br>"
+
+                +"Enjoy chatting!<br><br>"
+
+                +"CXAT Team";
+
+
+        sendEmail(
+                email,
+                "Welcome to CXAT",
+                html
+        );
+    }
+
+
+
+
+    /*
+     =========================
+     CORE MAIL METHOD
+     =========================
+     */
+
+    private void sendEmail(
+            String email,
+            String subject,
+            String html){
+
         try{
 
-            SimpleMailMessage mail =
-                    new SimpleMailMessage();
+            String json =
 
-            mail.setFrom("cxat.app@gmail.com");
+                    "{"
+                    +"\"from\":\""+FROM+"\","
+                    +"\"to\":[\""+email+"\"],"
+                    +"\"subject\":\""+subject+"\","
+                    +"\"html\":\""+html+"\""
+                    +"}";
 
-            mail.setReplyTo("cxat.app@gmail.com");
 
-            mail.setTo(email);
 
-            mail.setSubject(
-                    "Welcome to CXAT Chat"
-            );
+            RequestBody body =
+                    RequestBody.create(
+                            json,
+                            MediaType.parse(
+                                    "application/json"
+                            )
+                    );
 
-            mail.setText(
 
-                    "Welcome to CXAT!\n\n"
 
-                    + "Username: "
-                    + username + "\n"
+            Request request =
+                    new Request.Builder()
 
-                    + "User ID: "
-                    + userId + "\n\n"
+                            .url(
+                                    "https://api.resend.com/emails"
+                            )
 
-                    + "Rules:\n"
+                            .post(body)
 
-                    + "1. No spam\n"
-                    + "2. No abuse\n"
-                    + "3. Respect users\n\n"
+                            .addHeader(
+                                    "Authorization",
+                                    "Bearer "+apiKey
+                            )
 
-                    + "Enjoy chatting!\n\n"
+                            .addHeader(
+                                    "Content-Type",
+                                    "application/json"
+                            )
 
-                    + "CXAT Team"
+                            .build();
 
-            );
 
-            mailSender.send(mail);
+
+            Response response =
+                    client.newCall(request)
+                            .execute();
+
 
             System.out.println(
-                    "WELCOME MAIL SENT"
+                    "MAIL STATUS: "
+                            + response.code()
             );
+
+            response.close();
+
 
         }
 
         catch(Exception e){
 
             System.out.println(
-                    "WELCOME MAIL ERROR: "
-                            + e.getMessage()
+                    "MAIL ERROR: "
+                            +e.getMessage()
             );
+
         }
 
     }

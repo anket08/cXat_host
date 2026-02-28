@@ -12,83 +12,162 @@ public class User {
     @Id
     private String id;
 
+
+    /*
+     =========================
+     BASIC INFO
+     =========================
+     */
+
     private String username;
+
     private String email;
+
     private String password;
-
-    // OTP verify before register
-
-private String registerOtp;
-private String registerOtpExpiry;
 
     private String status = "OFFLINE";
 
-    private String createdAt =
-            LocalDateTime.now(ZoneOffset.UTC).toString();
 
-    // Forgot password fields (STRING ONLY)
+
+    /*
+     =========================
+     TIMESTAMP
+     =========================
+     */
+
+    private String createdAt =
+            LocalDateTime
+            .now(ZoneOffset.UTC)
+            .toString();
+
+
+
+    /*
+     =========================
+     RESET PASSWORD OTP
+     =========================
+     */
+
     private String resetCode;
+
     private String resetCodeExpiry;
 
-    // Required for MongoDB + Redis
+
+
+    /*
+     =========================
+     REGISTER OTP
+     =========================
+     */
+
+    private String registerOtp;
+
+    private String registerOtpExpiry;
+
+
+
+    /*
+     =========================
+     CONSTRUCTOR
+     =========================
+     */
+
     public User(){}
 
-    // ===== Getters =====
-
-    public String getId() { return id; }
-
-    public String getUsername() { return username; }
-
-    public String getEmail() { return email; }
-
-    public String getPassword() { return password; }
-
-    public String getStatus() { return status; }
-
-    public String getCreatedAt() { return createdAt; }
-
-    public String getResetCode() { return resetCode; }
-
-    public String getResetCodeExpiry() { return resetCodeExpiry; }
 
 
-    // ===== Setters =====
+    /*
+     =========================
+     GETTERS
+     =========================
+     */
 
-    public void setId(String id) { this.id = id; }
+    public String getId() {
+        return id;
+    }
 
-    public void setUsername(String username) { this.username = username; }
+    public String getUsername() {
+        return username;
+    }
 
-    public void setEmail(String email) { this.email = email; }
+    public String getEmail() {
+        return email;
+    }
 
-    public void setPassword(String password) { this.password = password; }
+    public String getPassword() {
+        return password;
+    }
 
-    public void setStatus(String status) { this.status = status; }
+    public String getStatus() {
+        return status;
+    }
 
-    public void setCreatedAt(String createdAt) { this.createdAt = createdAt; }
+    public String getCreatedAt() {
+        return createdAt;
+    }
 
-    public void setResetCode(String resetCode) { this.resetCode = resetCode; }
+    public String getResetCode() {
+        return resetCode;
+    }
+
+    public String getResetCodeExpiry() {
+        return resetCodeExpiry;
+    }
+
+    public String getRegisterOtp() {
+        return registerOtp;
+    }
+
+    public String getRegisterOtpExpiry() {
+        return registerOtpExpiry;
+    }
+
+
+
+    /*
+     =========================
+     SETTERS
+     =========================
+     */
+
+    public void setId(String id) {
+        this.id = id;
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public void setCreatedAt(String createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public void setResetCode(String resetCode) {
+        this.resetCode = resetCode;
+    }
 
     public void setResetCodeExpiry(String resetCodeExpiry) {
         this.resetCodeExpiry = resetCodeExpiry;
     }
 
+    public void setRegisterOtp(String registerOtp) {
+        this.registerOtp = registerOtp;
+    }
 
+    public void setRegisterOtpExpiry(String registerOtpExpiry) {
+        this.registerOtpExpiry = registerOtpExpiry;
+    }
 
-    // Register OTP
-
-public String getRegisterOtp() {
-    return registerOtp;
-}
-
-public void setRegisterOtp(String registerOtp) {
-    this.registerOtp = registerOtp;
-}
-
-public String getRegisterOtpExpiry() {
-    return registerOtpExpiry;
-}
-
-public void setRegisterOtpExpiry(String registerOtpExpiry) {
-    this.registerOtpExpiry = registerOtpExpiry;
-}
 }

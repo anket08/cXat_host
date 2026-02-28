@@ -11,31 +11,22 @@ import java.util.Random;
 @Service
 public class UserService {
 
-    /*
-     =========================
-     DEPENDENCIES
-     =========================
-     */
-
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final MailService mailService;
 
-    /*
-     =========================
-     CONSTRUCTOR
-     =========================
-     */
+
 
     public UserService(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
-            MailService mailService) {
+            MailService mailService){
 
-        this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.mailService = mailService;
+        this.userRepository=userRepository;
+        this.passwordEncoder=passwordEncoder;
+        this.mailService=mailService;
     }
+
 
 
     /*
@@ -46,12 +37,13 @@ public class UserService {
 
     private String generateCode(){
 
-        int code =
-                100000 +
-                new Random().nextInt(900000);
+        return String.valueOf(
+                100000+
+                new Random().nextInt(900000)
+        );
 
-        return String.valueOf(code);
     }
+
 
 
     /*
@@ -62,104 +54,68 @@ public class UserService {
 
     public User register(User user){
 
-        // Gmail validation
-
         if(user.getEmail()==null ||
-           !user.getEmail().endsWith("@gmail.com")){
-
-            throw new RuntimeException(
-                    "Only Gmail allowed"
-            );
-        }
+           !user.getEmail().endsWith("@gmail.com"))
+            throw new RuntimeException("Only Gmail allowed");
 
 
-        User existingEmail =
-                userRepository
-                .findByEmail(user.getEmail());
+        User temp=
+                userRepository.findByEmail(
+                        user.getEmail()
+                );
 
 
-        if(existingEmail==null){
-
-            throw new RuntimeException(
-                    "Verify OTP first"
-            );
-        }
+        if(temp==null ||
+           temp.getRegisterOtp()==null)
+            throw new RuntimeException("Verify OTP first");
 
 
-        // OTP verified check
-
-        if(existingEmail.getRegisterOtp()==null){
-
-            throw new RuntimeException(
-                    "Verify OTP first"
-            );
-        }
-
-
-        long expiry =
+        long expiry=
                 Long.parseLong(
-                existingEmail.getRegisterOtpExpiry()
+                        temp.getRegisterOtpExpiry()
+                );
+
+
+        if(System.currentTimeMillis()>expiry)
+            throw new RuntimeException("OTP expired");
+
+
+        if(userRepository.findByUsername(
+                user.getUsername())
+                .isPresent())
+            throw new RuntimeException("Username exists");
+
+
+
+        temp.setUsername(
+                user.getUsername()
         );
 
 
-        if(System.currentTimeMillis()>expiry){
-
-            throw new RuntimeException(
-                    "OTP expired"
-            );
-        }
-
-
-        // Username exists
-
-        if(userRepository
-                .findByUsername(
-                        user.getUsername())
-                .isPresent()){
-
-            throw new RuntimeException(
-                    "Username exists"
-            );
-        }
-
-
-
-        /*
-         Encrypt password
-        */
-
-        existingEmail.setUsername(
-                user.getUsername());
-
-        existingEmail.setPassword(
-
+        temp.setPassword(
                 passwordEncoder.encode(
                         user.getPassword()
-        ));
-
-        existingEmail.setStatus("OFFLINE");
-
-
-        User saved =
-                userRepository.save(
-                        existingEmail);
+                )
+        );
 
 
+        temp.setStatus("OFFLINE");
 
-        /*
-         Welcome Email (Async)
-        */
+
+        User saved=
+                userRepository.save(temp);
+
+
 
         mailService.sendWelcomeEmail(
-
                 saved.getEmail(),
                 saved.getUsername(),
                 saved.getId()
-
         );
 
 
         return saved;
+
     }
 
 
@@ -172,40 +128,27 @@ public class UserService {
 
     public User login(User user){
 
-        User existing =
+        User existing=
                 userRepository
-                .findByUsername(
-                        user.getUsername())
-                .orElse(null);
+                        .findByUsername(
+                                user.getUsername()
+                        )
+                        .orElse(null);
+
 
         if(existing==null)
             return null;
 
 
-        boolean match =
+        boolean match=
                 passwordEncoder.matches(
                         user.getPassword(),
                         existing.getPassword()
-        );
+                );
 
 
-        return match ? existing : null;
-    }
+        return match?existing:null;
 
-
-
-    /*
-     =========================
-     FIND USER
-     =========================
-     */
-
-    public User findByUsername(
-            String username){
-
-        return userRepository
-                .findByUsername(username)
-                .orElse(null);
     }
 
 
@@ -219,15 +162,16 @@ public class UserService {
     public String sendResetCode(
             String email){
 
-        User user =
+        User user=
                 userRepository
-                .findByEmail(email);
+                        .findByEmail(email);
+
 
         if(user==null)
             return "User not found";
 
 
-        String code =
+        String code=
                 generateCode();
 
 
@@ -238,10 +182,10 @@ public class UserService {
 
                 String.valueOf(
 
-                System.currentTimeMillis()
-                +600000
-
-        ));
+                        System.currentTimeMillis()
+                                +600000
+                )
+        );
 
 
         userRepository.save(user);
@@ -268,9 +212,10 @@ public class UserService {
             String email,
             String code){
 
-        User user =
+        User user=
                 userRepository
-                .findByEmail(email);
+                        .findByEmail(email);
+
 
         if(user==null)
             return "User not found";
@@ -284,14 +229,14 @@ public class UserService {
             return "Invalid code";
 
 
-        long expiry =
+        long expiry=
                 Long.parseLong(
-                user.getResetCodeExpiry()
-        );
+                        user.getResetCodeExpiry()
+                );
 
 
         if(System.currentTimeMillis()>expiry)
-            return "Code expired";
+            return "Expired";
 
 
         return "Verified";
@@ -306,42 +251,39 @@ public class UserService {
      */
 
     public String resetPassword(
-
             String email,
             String code,
-            String newPassword){
+            String password){
 
-        User user =
+        User user=
                 userRepository
-                .findByEmail(email);
+                        .findByEmail(email);
+
 
         if(user==null)
             return "User not found";
 
 
-        if(user.getResetCode()==null)
-            return "No reset request";
-
-
-        if(!user.getResetCode().equals(code))
+        if(!code.equals(
+                user.getResetCode()))
             return "Invalid code";
 
 
-        long expiry =
+        long expiry=
                 Long.parseLong(
-                user.getResetCodeExpiry()
-        );
+                        user.getResetCodeExpiry()
+                );
 
 
         if(System.currentTimeMillis()>expiry)
-            return "Code expired";
+            return "Expired";
 
 
         user.setPassword(
-
                 passwordEncoder.encode(
-                        newPassword
-        ));
+                        password
+                )
+        );
 
 
         user.setResetCode(null);
@@ -352,13 +294,14 @@ public class UserService {
 
 
         return "Password updated";
+
     }
 
 
 
     /*
      =========================
-     SEND REGISTER OTP
+     REGISTER OTP
      =========================
      */
 
@@ -366,19 +309,17 @@ public class UserService {
             String email){
 
         if(email==null ||
-           !email.endsWith("@gmail.com")){
-
+           !email.endsWith("@gmail.com"))
             return "Only Gmail allowed";
-        }
 
 
-        String code =
+        String code=
                 generateCode();
 
 
-        User user =
+        User user=
                 userRepository
-                .findByEmail(email);
+                        .findByEmail(email);
 
 
         if(user==null){
@@ -386,6 +327,7 @@ public class UserService {
             user=new User();
 
             user.setEmail(email);
+
         }
 
 
@@ -396,10 +338,10 @@ public class UserService {
 
                 String.valueOf(
 
-                System.currentTimeMillis()
-                +600000
-
-        ));
+                        System.currentTimeMillis()
+                                +600000
+                )
+        );
 
 
         userRepository.save(user);
@@ -426,33 +368,32 @@ public class UserService {
             String email,
             String code){
 
-        User user =
+        User user=
                 userRepository
-                .findByEmail(email);
+                        .findByEmail(email);
+
 
         if(user==null)
             return "User not found";
 
 
-        if(user.getRegisterOtp()==null)
-            return "OTP not requested";
-
-
-        if(!user.getRegisterOtp().equals(code))
+        if(!code.equals(
+                user.getRegisterOtp()))
             return "Invalid OTP";
 
 
-        long expiry =
+        long expiry=
                 Long.parseLong(
-                user.getRegisterOtpExpiry()
-        );
+                        user.getRegisterOtpExpiry()
+                );
 
 
         if(System.currentTimeMillis()>expiry)
-            return "OTP expired";
+            return "Expired";
 
 
         return "Verified";
+
     }
 
 }
