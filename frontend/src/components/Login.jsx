@@ -50,25 +50,42 @@ const Login = ({ onLogin }) => {
     };
 
     const handleRegister = async (e) => {
-        e.preventDefault();
-        setLoading(true);
-        const startTime = Date.now();
-        try {
-            const res = await axios.post(`${import.meta.env.VITE_API_URL}/auth/register`, {
+
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+
+        const res = await axios.post(
+            `${import.meta.env.VITE_API_URL}/auth/register`,
+            {
                 username: formData.username,
                 password: formData.password,
                 email: formData.email,
                 role: 'USER'
-            });
-            await minLoadTime(startTime);
-            onLogin(res.data);
-        } catch (err) {
-            await minLoadTime(startTime);
-            setError('Registration failed. Username or Email might be taken.');
-        } finally {
-            setLoading(false);
+            }
+        );
+
+        onLogin(res.data);
+
+    } catch (err) {
+
+        console.log("REGISTER ERROR:", err);
+
+        if(err.response){
+            setError("Registration failed");
         }
-    };
+        else if(err.request){
+            setError("Server waking up... Try again in 20 sec");
+        }
+        else{
+            setError("Unexpected error");
+        }
+
+    } finally {
+        setLoading(false);
+    }
+};
 
     const pageVariants = {
         initial: { opacity: 0, scale: 0.98 },
