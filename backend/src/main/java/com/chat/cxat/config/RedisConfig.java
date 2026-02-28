@@ -3,8 +3,8 @@ package com.chat.cxat.config;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 
@@ -21,13 +21,23 @@ public class RedisConfig {
 
         template.setConnectionFactory(factory);
 
-        // Key as string
+        // Key serializer
         template.setKeySerializer(
                 new StringRedisSerializer());
 
-        // Value as JSON
+        // Value serializer
         template.setValueSerializer(
                 new GenericJackson2JsonRedisSerializer());
+
+        // Hash key serializer
+        template.setHashKeySerializer(
+                new StringRedisSerializer());
+
+        // Hash value serializer
+        template.setHashValueSerializer(
+                new GenericJackson2JsonRedisSerializer());
+
+        template.afterPropertiesSet();
 
         return template;
     }

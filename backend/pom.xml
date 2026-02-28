@@ -17,6 +17,9 @@
     </properties>
     <dependencies>
 
+
+        
+
     <!-- COMMENTED: JPA (not needed for Mongo) -->
     <!--
     <dependency>
@@ -29,6 +32,15 @@
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-security</artifactId>
     </dependency>
+
+
+    <!-- mail dep -->
+
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-mail</artifactId>
+    </dependency>
+
 
     <dependency>
         <groupId>org.springframework.boot</groupId>

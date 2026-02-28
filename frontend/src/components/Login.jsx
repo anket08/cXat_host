@@ -11,13 +11,27 @@ const Login = ({ onLogin }) => {
     const passedUsername = location.state?.username || '';
 
     const [isRegistering, setIsRegistering] = useState(false);
+    const [registerStep, setRegisterStep] = useState(0); // 0: Enter Details, 1: Enter OTP
+    const [registerOtp, setRegisterOtp] = useState('');
     const [formData, setFormData] = useState({ username: passedUsername, password: '', email: '' });
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
+    // Password Reset State
+    const [resetStep, setResetStep] = useState(0); // 0: None, 1: Email, 2: Code, 3: New Password
+    const [resetData, setResetData] = useState({ email: '', code: '', newPassword: '' });
+    const [successMsg, setSuccessMsg] = useState('');
+
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
         setError('');
+        setSuccessMsg('');
+    };
+
+    const handleResetChange = (e) => {
+        setResetData({ ...resetData, [e.target.name]: e.target.value });
+        setError('');
+        setSuccessMsg('');
     };
 
     const minLoadTime = (startTime) => {
@@ -43,49 +57,160 @@ const Login = ({ onLogin }) => {
             }
         } catch (err) {
             await minLoadTime(startTime);
-            setError('Please check your credentials and try again.');
+            if (!err.response) {
+                setError('Server waking up... Please try again in 60 seconds.');
+                axios.get(`${import.meta.env.VITE_API_URL}/auth/health`).catch(() => { });
+            } else {
+                setError('Please check your credentials and try again.');
+            }
         } finally {
             setLoading(false);
         }
     };
 
-    const handleRegister = async (e) => {
+    const handleSendRegisterOtp = async (e) => {
+        e.preventDefault();
 
-    e.preventDefault();
-    setLoading(true);
+        if (!formData.email.toLowerCase().endsWith("@gmail.com")) {
+            setError("Only @gmail.com addresses are allowed for registration.");
+            return;
+        }
 
-    try {
-
-        const res = await axios.post(
-            `${import.meta.env.VITE_API_URL}/auth/register`,
-            {
-                username: formData.username,
-                password: formData.password,
-                email: formData.email,
-                role: 'USER'
+        setLoading(true);
+        const startTime = Date.now();
+        try {
+            const response = await axios.post(`${import.meta.env.VITE_API_URL}/auth/send-otp?email=${formData.email}`);
+            await minLoadTime(startTime);
+            if (response.status === 200) {
+                if (response.data === "OTP Sent") {
+                    setSuccessMsg("Verification OTP sent to your email.");
+                    setRegisterStep(1);
+                } else {
+                    setError(response.data || 'Failed to send OTP.');
+                }
             }
-        );
-
-        onLogin(res.data);
-
-    } catch (err) {
-
-        console.log("REGISTER ERROR:", err);
-
-        if(err.response){
-            setError("Registration failed");
+        } catch (err) {
+            await minLoadTime(startTime);
+            if (!err.response) {
+                setError('Server waking up... Please try again in 60 seconds.');
+                axios.get(`${import.meta.env.VITE_API_URL}/auth/health`).catch(() => { });
+            } else {
+                setError(err.response?.data || 'Failed to send OTP.');
+            }
+        } finally {
+            setLoading(false);
         }
-        else if(err.request){
-            setError("Server waking up... Try again in 20 sec");
-        }
-        else{
-            setError("Unexpected error");
-        }
+    };
 
-    } finally {
-        setLoading(false);
-    }
-};
+    const handleVerifyAndRegister = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        const startTime = Date.now();
+        try {
+            const verifyResponse = await axios.post(`${import.meta.env.VITE_API_URL}/auth/verify-otp?email=${formData.email}&code=${registerOtp}`);
+
+            if (verifyResponse.data === "Verified") {
+                const registerResponse = await axios.post(`${import.meta.env.VITE_API_URL}/auth/register`, {
+                    username: formData.username,
+                    password: formData.password,
+                    email: formData.email
+                });
+                await minLoadTime(startTime);
+                onLogin(registerResponse.data);
+            } else {
+                await minLoadTime(startTime);
+                setError(verifyResponse.data || 'Invalid OTP');
+                setLoading(false);
+            }
+        } catch (err) {
+            await minLoadTime(startTime);
+            if (!err.response) {
+                setError('Server waking up... Please try again in 60 seconds.');
+                axios.get(`${import.meta.env.VITE_API_URL}/auth/health`).catch(() => { });
+            } else {
+                setError(err.response?.data?.message || err.response?.data || 'Failed to verify OTP or register. Username or Email might be taken.');
+            }
+            setLoading(false);
+        }
+    };
+
+    // --- Forgot Password Flow Handlers ---
+
+    const handleForgotPassword = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        const startTime = Date.now();
+        try {
+            const response = await axios.post(`${import.meta.env.VITE_API_URL}/auth/forgot?email=${resetData.email}`);
+            await minLoadTime(startTime);
+            if (response.status === 200) {
+                setSuccessMsg("Reset code sent to your email.");
+                setResetStep(2);
+            }
+        } catch (err) {
+            await minLoadTime(startTime);
+            if (!err.response) {
+                setError('Server waking up... Please try again in 60 seconds.');
+                axios.get(`${import.meta.env.VITE_API_URL}/auth/health`).catch(() => { });
+            } else {
+                setError(err.response?.data || 'Failed to send reset code.');
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleVerifyCode = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        const startTime = Date.now();
+        try {
+            const response = await axios.post(`${import.meta.env.VITE_API_URL}/auth/verify?email=${resetData.email}&code=${resetData.code}`);
+            await minLoadTime(startTime);
+            if (response.status === 200) {
+                setSuccessMsg("Code verified perfectly.");
+                setResetStep(3);
+            }
+        } catch (err) {
+            await minLoadTime(startTime);
+            if (!err.response) {
+                setError('Server waking up... Please try again in 60 seconds.');
+                axios.get(`${import.meta.env.VITE_API_URL}/auth/health`).catch(() => { });
+            } else {
+                setError(err.response?.data || 'Invalid or expired code.');
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleResetPassword = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        const startTime = Date.now();
+        try {
+            const response = await axios.post(`${import.meta.env.VITE_API_URL}/auth/reset?email=${resetData.email}&code=${resetData.code}&password=${resetData.newPassword}`);
+            await minLoadTime(startTime);
+            if (response.status === 200) {
+                setSuccessMsg("Password reset successfully! Please sign in.");
+                setResetStep(0);
+                setIsRegistering(false);
+                setResetData({ email: '', code: '', newPassword: '' });
+                setFormData({ ...formData, password: '' });
+            }
+        } catch (err) {
+            await minLoadTime(startTime);
+            if (!err.response) {
+                setError('Server waking up... Please try again in 60 seconds.');
+                axios.get(`${import.meta.env.VITE_API_URL}/auth/health`).catch(() => { });
+            } else {
+                setError(err.response?.data || 'Failed to reset password.');
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
+
 
     const pageVariants = {
         initial: { opacity: 0, scale: 0.98 },
@@ -151,6 +276,13 @@ const Login = ({ onLogin }) => {
                     </p>
                 </div>
 
+                {successMsg && (
+                    <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
+                        style={{ background: 'rgba(75, 255, 120, 0.1)', border: '1px solid rgba(75, 255, 120, 0.2)', color: 'var(--success)', padding: '12px 16px', borderRadius: '12px', fontSize: '0.85rem', marginBottom: '1.5rem', textAlign: 'center', fontWeight: '600' }}>
+                        {successMsg}
+                    </motion.div>
+                )}
+
                 {error && (
                     <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
                         style={{ background: 'rgba(255, 75, 75, 0.1)', border: '1px solid rgba(255, 75, 75, 0.2)', color: 'var(--error)', padding: '12px 16px', borderRadius: '12px', fontSize: '0.85rem', marginBottom: '1.5rem', textAlign: 'center', fontWeight: '600' }}>
@@ -158,63 +290,176 @@ const Login = ({ onLogin }) => {
                     </motion.div>
                 )}
 
-                <form onSubmit={isRegistering ? handleRegister : handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    <AnimatePresence mode="wait">
-                        <motion.div key={isRegistering ? 'reg' : 'log'} initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {/* Main Content Area */}
+                {resetStep === 0 ? (
+                    <>
+                        {/* --- Standard Login/Register Form --- */}
+                        {isRegistering && registerStep === 1 ? (
+                            <form onSubmit={handleVerifyAndRegister} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                <AnimatePresence mode="wait">
+                                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                        <h2 style={{ fontSize: '1.2rem', fontWeight: '600', marginBottom: '0.5rem', textAlign: 'center' }}>Verify Email</h2>
+                                        <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center', marginBottom: '1rem' }}>We sent an OTP to <br /><strong style={{ color: 'var(--text-main)' }}>{formData.email}</strong></p>
 
-                            {isRegistering && (
-                                <div className="input-field-group" style={{ position: 'relative' }}>
-                                    <Mail size={18} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                                    <input name="email" type="email" placeholder="Email Address" value={formData.email} onChange={handleChange} required
-                                        style={{ width: '100%', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', padding: '16px 16px 16px 46px', borderRadius: '14px', color: '#fff', fontSize: '0.95rem', outline: 'none', transition: 'all 0.3s ease' }}
-                                        onFocus={e => { e.target.style.borderColor = 'var(--accent-primary)'; e.target.style.background = 'rgba(255,255,255,0.05)'; }}
-                                        onBlur={e => { e.target.style.borderColor = 'var(--glass-border)'; e.target.style.background = 'rgba(255,255,255,0.03)'; }}
-                                    />
-                                </div>
-                            )}
+                                        <div className="input-field-group" style={{ position: 'relative' }}>
+                                            <Lock size={18} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                                            <input name="registerOtp" type="text" placeholder="6-digit OTP" value={registerOtp} onChange={(e) => { setRegisterOtp(e.target.value); setError(''); setSuccessMsg(''); }} required
+                                                style={{ width: '100%', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', padding: '16px 16px 16px 46px', borderRadius: '14px', color: '#fff', fontSize: '0.95rem', outline: 'none', transition: 'all 0.3s ease', letterSpacing: '2px' }}
+                                                onFocus={e => { e.target.style.borderColor = 'var(--accent-primary)'; e.target.style.background = 'rgba(255,255,255,0.05)'; }}
+                                                onBlur={e => { e.target.style.borderColor = 'var(--glass-border)'; e.target.style.background = 'rgba(255,255,255,0.03)'; }}
+                                            />
+                                        </div>
+                                    </motion.div>
+                                </AnimatePresence>
 
-                            <div className="input-field-group" style={{ position: 'relative' }}>
-                                <User size={18} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                                <input name="username" type="text" placeholder="Username" value={formData.username} onChange={handleChange} required
-                                    style={{ width: '100%', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', padding: '16px 16px 16px 46px', borderRadius: '14px', color: '#fff', fontSize: '0.95rem', outline: 'none', transition: 'all 0.3s ease' }}
-                                    onFocus={e => { e.target.style.borderColor = 'var(--accent-primary)'; e.target.style.background = 'rgba(255,255,255,0.05)'; }}
-                                    onBlur={e => { e.target.style.borderColor = 'var(--glass-border)'; e.target.style.background = 'rgba(255,255,255,0.03)'; }}
-                                />
-                            </div>
+                                <motion.button
+                                    type="submit"
+                                    disabled={loading}
+                                    style={{ marginTop: '0.5rem', width: '100%', padding: '16px', background: 'var(--text-main)', color: 'var(--bg-base)', border: 'none', borderRadius: '14px', fontWeight: '700', fontSize: '0.95rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', transition: 'all 0.3s ease' }}
+                                    whileHover={{ scale: 1.02, boxShadow: '0 10px 25px rgba(255,255,255,0.2)' }}
+                                    whileTap={{ scale: 0.98 }}
+                                >
+                                    Verify & Register <ArrowRight size={18} />
+                                </motion.button>
+                                <button type="button" onClick={() => { setRegisterStep(0); setError(''); setSuccessMsg(''); }} style={{ marginTop: '0.5rem', background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '0.85rem', cursor: 'pointer', textAlign: 'center' }}>Back to Email</button>
+                            </form>
+                        ) : (
+                            <form onSubmit={isRegistering ? handleSendRegisterOtp : handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                <AnimatePresence mode="wait">
+                                    <motion.div key={isRegistering ? 'reg' : 'log'} initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
 
-                            <div className="input-field-group" style={{ position: 'relative' }}>
-                                <Lock size={18} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                                <input name="password" type="password" placeholder="Password" value={formData.password} onChange={handleChange} required
-                                    style={{ width: '100%', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', padding: '16px 16px 16px 46px', borderRadius: '14px', color: '#fff', fontSize: '0.95rem', outline: 'none', transition: 'all 0.3s ease' }}
-                                    onFocus={e => { e.target.style.borderColor = 'var(--accent-primary)'; e.target.style.background = 'rgba(255,255,255,0.05)'; }}
-                                    onBlur={e => { e.target.style.borderColor = 'var(--glass-border)'; e.target.style.background = 'rgba(255,255,255,0.03)'; }}
-                                />
-                            </div>
-                        </motion.div>
-                    </AnimatePresence>
+                                        {isRegistering && (
+                                            <div className="input-field-group" style={{ position: 'relative' }}>
+                                                <Mail size={18} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                                                <input name="email" type="email" placeholder="Email Address" value={formData.email} onChange={handleChange} required
+                                                    style={{ width: '100%', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', padding: '16px 16px 16px 46px', borderRadius: '14px', color: '#fff', fontSize: '0.95rem', outline: 'none', transition: 'all 0.3s ease' }}
+                                                    onFocus={e => { e.target.style.borderColor = 'var(--accent-primary)'; e.target.style.background = 'rgba(255,255,255,0.05)'; }}
+                                                    onBlur={e => { e.target.style.borderColor = 'var(--glass-border)'; e.target.style.background = 'rgba(255,255,255,0.03)'; }}
+                                                />
+                                            </div>
+                                        )}
 
-                    <motion.button
-                        type="submit"
-                        disabled={loading}
-                        style={{ marginTop: '1rem', width: '100%', padding: '16px', background: 'var(--text-main)', color: 'var(--bg-base)', border: 'none', borderRadius: '14px', fontWeight: '700', fontSize: '0.95rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', transition: 'all 0.3s ease' }}
-                        whileHover={{ scale: 1.02, boxShadow: '0 10px 25px rgba(255,255,255,0.2)' }}
-                        whileTap={{ scale: 0.98 }}
-                    >
-                        {isRegistering ? 'Create Account' : 'Sign In'} <ArrowRight size={18} />
-                    </motion.button>
-                </form>
+                                        <div className="input-field-group" style={{ position: 'relative' }}>
+                                            <User size={18} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                                            <input name="username" type="text" placeholder="Username" value={formData.username} onChange={handleChange} required
+                                                style={{ width: '100%', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', padding: '16px 16px 16px 46px', borderRadius: '14px', color: '#fff', fontSize: '0.95rem', outline: 'none', transition: 'all 0.3s ease' }}
+                                                onFocus={e => { e.target.style.borderColor = 'var(--accent-primary)'; e.target.style.background = 'rgba(255,255,255,0.05)'; }}
+                                                onBlur={e => { e.target.style.borderColor = 'var(--glass-border)'; e.target.style.background = 'rgba(255,255,255,0.03)'; }}
+                                            />
+                                        </div>
 
-                <div style={{ marginTop: '2rem', textAlign: 'center' }}>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                        {isRegistering ? 'Already have an account?' : "Don't have an account?"}
-                        <button
-                            onClick={() => { setIsRegistering(!isRegistering); setError(''); setFormData({ username: '', password: '', email: '' }); }}
-                            style={{ background: 'none', border: 'none', color: 'var(--accent-primary)', fontWeight: '600', marginLeft: '6px', cursor: 'pointer' }}
-                        >
-                            {isRegistering ? 'Sign in' : 'Sign up'}
-                        </button>
-                    </p>
-                </div>
+                                        <div className="input-field-group" style={{ position: 'relative' }}>
+                                            <Lock size={18} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                                            <input name="password" type="password" placeholder="Password" value={formData.password} onChange={handleChange} required
+                                                style={{ width: '100%', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', padding: '16px 16px 16px 46px', borderRadius: '14px', color: '#fff', fontSize: '0.95rem', outline: 'none', transition: 'all 0.3s ease' }}
+                                                onFocus={e => { e.target.style.borderColor = 'var(--accent-primary)'; e.target.style.background = 'rgba(255,255,255,0.05)'; }}
+                                                onBlur={e => { e.target.style.borderColor = 'var(--glass-border)'; e.target.style.background = 'rgba(255,255,255,0.03)'; }}
+                                            />
+                                        </div>
+                                    </motion.div>
+                                </AnimatePresence>
+
+                                {!isRegistering && (
+                                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '-4px' }}>
+                                        <button type="button" onClick={() => { setResetStep(1); setError(''); setSuccessMsg(''); setResetData({ ...resetData, email: formData.email }); }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: '500', cursor: 'pointer', transition: 'color 0.2s' }} onMouseOver={e => e.currentTarget.style.color = 'var(--text-main)'} onMouseOut={e => e.currentTarget.style.color = 'var(--text-muted)'}>
+                                            Forgot Password?
+                                        </button>
+                                    </div>
+                                )}
+
+                                <motion.button
+                                    type="submit"
+                                    disabled={loading}
+                                    style={{ marginTop: '0.5rem', width: '100%', padding: '16px', background: 'var(--text-main)', color: 'var(--bg-base)', border: 'none', borderRadius: '14px', fontWeight: '700', fontSize: '0.95rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', transition: 'all 0.3s ease' }}
+                                    whileHover={{ scale: 1.02, boxShadow: '0 10px 25px rgba(255,255,255,0.2)' }}
+                                    whileTap={{ scale: 0.98 }}
+                                >
+                                    {isRegistering ? 'Proceed & Send OTP' : 'Sign In'} <ArrowRight size={18} />
+                                </motion.button>
+                            </form>
+                        )}
+
+                        <div style={{ marginTop: '2rem', textAlign: 'center' }}>
+                            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                                {isRegistering ? 'Already have an account?' : "Don't have an account?"}
+                                <button
+                                    onClick={() => { setIsRegistering(!isRegistering); setRegisterStep(0); setRegisterOtp(''); setError(''); setSuccessMsg(''); setFormData({ username: '', password: '', email: '' }); }}
+                                    style={{ background: 'none', border: 'none', color: 'var(--accent-primary)', fontWeight: '600', marginLeft: '6px', cursor: 'pointer' }}
+                                >
+                                    {isRegistering ? 'Sign in' : 'Sign up'}
+                                </button>
+                            </p>
+                        </div>
+                    </>
+                ) : (
+                    <>
+                        {/* --- Reset Password Flow --- */}
+                        <AnimatePresence mode="wait">
+                            <motion.div key={`reset-${resetStep}`} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3 }}>
+
+                                {resetStep === 1 && (
+                                    <form onSubmit={handleForgotPassword} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                        <h2 style={{ fontSize: '1.2rem', fontWeight: '600', marginBottom: '0.5rem', textAlign: 'center' }}>Reset Password</h2>
+                                        <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center', marginBottom: '1rem' }}>Enter your email to receive a recovery code.</p>
+
+                                        <div className="input-field-group" style={{ position: 'relative' }}>
+                                            <Mail size={18} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                                            <input name="email" type="email" placeholder="Email Address" value={resetData.email} onChange={handleResetChange} required
+                                                style={{ width: '100%', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', padding: '16px 16px 16px 46px', borderRadius: '14px', color: '#fff', fontSize: '0.95rem', outline: 'none', transition: 'all 0.3s ease' }}
+                                                onFocus={e => { e.target.style.borderColor = 'var(--accent-primary)'; e.target.style.background = 'rgba(255,255,255,0.05)'; }}
+                                                onBlur={e => { e.target.style.borderColor = 'var(--glass-border)'; e.target.style.background = 'rgba(255,255,255,0.03)'; }}
+                                            />
+                                        </div>
+                                        <motion.button type="submit" disabled={loading} style={{ marginTop: '0.5rem', width: '100%', padding: '16px', background: 'var(--text-main)', color: 'var(--bg-base)', border: 'none', borderRadius: '14px', fontWeight: '700', fontSize: '0.95rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', transition: 'all 0.3s ease' }} whileHover={{ scale: 1.02, boxShadow: '0 10px 25px rgba(255,255,255,0.2)' }} whileTap={{ scale: 0.98 }}>
+                                            Send Code
+                                        </motion.button>
+                                        <button type="button" onClick={() => { setResetStep(0); setError(''); setSuccessMsg(''); }} style={{ marginTop: '1rem', background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '0.85rem', cursor: 'pointer', textAlign: 'center' }}>Back to Login</button>
+                                    </form>
+                                )}
+
+                                {resetStep === 2 && (
+                                    <form onSubmit={handleVerifyCode} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                        <h2 style={{ fontSize: '1.2rem', fontWeight: '600', marginBottom: '0.5rem', textAlign: 'center' }}>Enter Verification Code</h2>
+                                        <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center', marginBottom: '1rem' }}>We sent a code to <br /><strong style={{ color: 'var(--text-main)' }}>{resetData.email}</strong></p>
+
+                                        <div className="input-field-group" style={{ position: 'relative' }}>
+                                            <Lock size={18} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                                            <input name="code" type="text" placeholder="6-digit code" value={resetData.code} onChange={handleResetChange} required
+                                                style={{ width: '100%', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', padding: '16px 16px 16px 46px', borderRadius: '14px', color: '#fff', fontSize: '0.95rem', outline: 'none', transition: 'all 0.3s ease', letterSpacing: '2px' }}
+                                                onFocus={e => { e.target.style.borderColor = 'var(--accent-primary)'; e.target.style.background = 'rgba(255,255,255,0.05)'; }}
+                                                onBlur={e => { e.target.style.borderColor = 'var(--glass-border)'; e.target.style.background = 'rgba(255,255,255,0.03)'; }}
+                                            />
+                                        </div>
+                                        <motion.button type="submit" disabled={loading} style={{ marginTop: '0.5rem', width: '100%', padding: '16px', background: 'var(--text-main)', color: 'var(--bg-base)', border: 'none', borderRadius: '14px', fontWeight: '700', fontSize: '0.95rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', transition: 'all 0.3s ease' }} whileHover={{ scale: 1.02, boxShadow: '0 10px 25px rgba(255,255,255,0.2)' }} whileTap={{ scale: 0.98 }}>
+                                            Verify Code
+                                        </motion.button>
+                                        <button type="button" onClick={() => setResetStep(1)} style={{ marginTop: '1rem', background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '0.85rem', cursor: 'pointer', textAlign: 'center' }}>Change Email</button>
+                                    </form>
+                                )}
+
+                                {resetStep === 3 && (
+                                    <form onSubmit={handleResetPassword} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                        <h2 style={{ fontSize: '1.2rem', fontWeight: '600', marginBottom: '0.5rem', textAlign: 'center' }}>Create New Password</h2>
+                                        <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center', marginBottom: '1rem' }}>Enter a strong password for your account.</p>
+
+                                        <div className="input-field-group" style={{ position: 'relative' }}>
+                                            <Lock size={18} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                                            <input name="newPassword" type="password" placeholder="New Password" value={resetData.newPassword} onChange={handleResetChange} required
+                                                style={{ width: '100%', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', padding: '16px 16px 16px 46px', borderRadius: '14px', color: '#fff', fontSize: '0.95rem', outline: 'none', transition: 'all 0.3s ease' }}
+                                                onFocus={e => { e.target.style.borderColor = 'var(--accent-primary)'; e.target.style.background = 'rgba(255,255,255,0.05)'; }}
+                                                onBlur={e => { e.target.style.borderColor = 'var(--glass-border)'; e.target.style.background = 'rgba(255,255,255,0.03)'; }}
+                                            />
+                                        </div>
+                                        <motion.button type="submit" disabled={loading} style={{ marginTop: '0.5rem', width: '100%', padding: '16px', background: 'var(--text-main)', color: 'var(--bg-base)', border: 'none', borderRadius: '14px', fontWeight: '700', fontSize: '0.95rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', transition: 'all 0.3s ease' }} whileHover={{ scale: 1.02, boxShadow: '0 10px 25px rgba(255,255,255,0.2)' }} whileTap={{ scale: 0.98 }}>
+                                            Reset Password
+                                        </motion.button>
+                                    </form>
+                                )}
+
+                            </motion.div>
+                        </AnimatePresence>
+                    </>
+                )}
             </div>
         </motion.div>
     );

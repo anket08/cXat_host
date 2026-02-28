@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { User, Shield, Save, Lock, FileText, CheckCircle, AtSign, Settings } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { User, Shield, Save, Lock, FileText, CheckCircle, AtSign, Settings, Mail, ArrowRight } from 'lucide-react';
+import axios from 'axios';
 
 const ProfileDashboard = () => {
     // We already have Navbar globally via App.jsx
@@ -8,11 +9,16 @@ const ProfileDashboard = () => {
     const [formData, setFormData] = useState({
         username: '',
         bio: '',
-        gender: '',
-        newPassword: '',
-        confirmPassword: ''
+        gender: ''
     });
     const [saveStatus, setSaveStatus] = useState(null); // 'saving', 'success', 'error'
+
+    // Password Reset Flow State
+    const [resetStep, setResetStep] = useState(0); // 0: Hidden, 1: Email, 2: Code, 3: New Password
+    const [resetData, setResetData] = useState({ email: '', code: '', newPassword: '' });
+    const [resetLoading, setResetLoading] = useState(false);
+    const [resetError, setResetError] = useState('');
+    const [resetSuccess, setResetSuccess] = useState('');
 
     useEffect(() => {
         const storedUser = localStorage.getItem('cxat_user');
@@ -22,10 +28,9 @@ const ProfileDashboard = () => {
             setFormData({
                 username: parsed.username || '',
                 bio: parsed.bio || 'Available',
-                gender: parsed.gender || 'n',
-                newPassword: '',
-                confirmPassword: ''
+                gender: parsed.gender || 'n'
             });
+            setResetData((prev) => ({ ...prev, email: parsed.email || '' }));
         }
     }, []);
 
@@ -33,24 +38,103 @@ const ProfileDashboard = () => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
+    const handleResetChange = (e) => {
+        setResetData({ ...resetData, [e.target.name]: e.target.value });
+        setResetError('');
+        setResetSuccess('');
+    };
+
     const handleSave = (e) => {
         e.preventDefault();
         setSaveStatus('saving');
 
         setTimeout(() => {
-            if (formData.newPassword && formData.newPassword !== formData.confirmPassword) {
-                setSaveStatus('error');
-                alert("Passwords do not match!");
-                setSaveStatus(null);
-                return;
-            }
-
             const updatedUser = { ...user, ...formData };
             setUser(updatedUser);
             localStorage.setItem('cxat_user', JSON.stringify(updatedUser));
             setSaveStatus('success');
             setTimeout(() => setSaveStatus(null), 2000);
         }, 1000);
+    };
+
+    const minLoadTime = (startTime) => {
+        const elapsed = Date.now() - startTime;
+        return new Promise(resolve => setTimeout(resolve, Math.max(0, 1500 - elapsed)));
+    };
+
+    const handleForgotPassword = async (e) => {
+        e.preventDefault();
+        setResetLoading(true);
+        const startTime = Date.now();
+        try {
+            const response = await axios.post(`${import.meta.env.VITE_API_URL}/auth/forgot?email=${resetData.email}`);
+            await minLoadTime(startTime);
+            if (response.status === 200) {
+                setResetSuccess("Code sent to email. Please check your inbox.");
+                setResetStep(2);
+            }
+        } catch (err) {
+            await minLoadTime(startTime);
+            if (!err.response) {
+                setResetError('Server waking up... Try again in 60s.');
+                axios.get(`${import.meta.env.VITE_API_URL}/auth/health`).catch(() => { });
+            } else {
+                setResetError(err.response?.data || 'Failed to send code.');
+            }
+        } finally {
+            setResetLoading(false);
+        }
+    };
+
+    const handleVerifyCode = async (e) => {
+        e.preventDefault();
+        setResetLoading(true);
+        const startTime = Date.now();
+        try {
+            const response = await axios.post(`${import.meta.env.VITE_API_URL}/auth/verify?email=${resetData.email}&code=${resetData.code}`);
+            await minLoadTime(startTime);
+            if (response.status === 200) {
+                setResetSuccess("Code verified OK. Now set new password.");
+                setResetStep(3);
+            }
+        } catch (err) {
+            await minLoadTime(startTime);
+            if (!err.response) {
+                setResetError('Server waking up... Try again in 60s.');
+                axios.get(`${import.meta.env.VITE_API_URL}/auth/health`).catch(() => { });
+            } else {
+                setResetError(err.response?.data || 'Invalid code.');
+            }
+        } finally {
+            setResetLoading(false);
+        }
+    };
+
+    const handleResetPassword = async (e) => {
+        e.preventDefault();
+        setResetLoading(true);
+        const startTime = Date.now();
+        try {
+            const response = await axios.post(`${import.meta.env.VITE_API_URL}/auth/reset?email=${resetData.email}&code=${resetData.code}&password=${resetData.newPassword}`);
+            await minLoadTime(startTime);
+            if (response.status === 200) {
+                setResetSuccess("Password updated successfully!");
+                setTimeout(() => {
+                    setResetStep(0);
+                    setResetData({ email: user.email || '', code: '', newPassword: '' });
+                }, 2500);
+            }
+        } catch (err) {
+            await minLoadTime(startTime);
+            if (!err.response) {
+                setResetError('Server waking up... Try again in 60s.');
+                axios.get(`${import.meta.env.VITE_API_URL}/auth/health`).catch(() => { });
+            } else {
+                setResetError(err.response?.data || 'Password update failed.');
+            }
+        } finally {
+            setResetLoading(false);
+        }
     };
 
     const containerVariants = {
@@ -100,13 +184,11 @@ const ProfileDashboard = () => {
                         <form onSubmit={handleSave} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '2rem' }}>
 
                             <div style={{ gridColumn: 'span 2' }}>
-                                <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '8px', fontWeight: '600' }}>DISPLAY NAME</label>
+                                <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '8px', fontWeight: '600' }}>EMAIL ADDRESS</label>
                                 <div style={{ position: 'relative' }}>
-                                    <AtSign size={18} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                                    <input type="text" name="username" value={formData.username} onChange={handleChange}
-                                        style={{ width: '100%', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--glass-border)', padding: '14px 14px 14px 46px', borderRadius: '12px', color: '#fff', fontSize: '0.95rem', outline: 'none', transition: 'all 0.3s' }}
-                                        onFocus={e => { e.target.style.borderColor = 'var(--accent-primary)'; e.target.style.background = 'rgba(255,255,255,0.04)'; }}
-                                        onBlur={e => { e.target.style.borderColor = 'var(--glass-border)'; e.target.style.background = 'rgba(255,255,255,0.02)'; }}
+                                    <Mail size={18} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                                    <input type="email" value={user?.email || ''} readOnly disabled
+                                        style={{ width: '100%', background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)', padding: '14px 14px 14px 46px', borderRadius: '12px', color: 'var(--text-muted)', fontSize: '0.95rem', outline: 'none', cursor: 'not-allowed' }}
                                     />
                                 </div>
                             </div>
@@ -123,45 +205,10 @@ const ProfileDashboard = () => {
                                 </div>
                             </div>
 
-                            <div style={{ gridColumn: 'span 2' }}>
-                                <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '8px', fontWeight: '600' }}>IDENTITY</label>
-                                <select name="gender" value={formData.gender} onChange={handleChange}
-                                    style={{ width: '100%', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--glass-border)', padding: '14px', borderRadius: '12px', color: '#fff', fontSize: '0.95rem', outline: 'none', cursor: 'pointer', appearance: 'none' }}
-                                >
-                                    <option value="m" style={{ background: '#111' }}>Male</option>
-                                    <option value="f" style={{ background: '#111' }}>Female</option>
-                                    <option value="n" style={{ background: '#111' }}>Non-Binary</option>
-                                    <option value="x" style={{ background: '#111' }}>Prefer not to say</option>
-                                </select>
-                            </div>
-
                             <div style={{ gridColumn: 'span 2', height: '1px', background: 'var(--glass-border)', margin: '1rem 0' }}></div>
 
-                            <div>
-                                <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '8px', fontWeight: '600' }}>NEW PASSWORD</label>
-                                <div style={{ position: 'relative' }}>
-                                    <Lock size={18} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                                    <input type="password" name="newPassword" value={formData.newPassword} onChange={handleChange} placeholder="••••••••"
-                                        style={{ width: '100%', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--glass-border)', padding: '14px 14px 14px 46px', borderRadius: '12px', color: '#fff', fontSize: '0.95rem', outline: 'none', transition: 'all 0.3s' }}
-                                        onFocus={e => { e.target.style.borderColor = 'var(--accent-secondary)'; e.target.style.background = 'rgba(255,255,255,0.04)'; }}
-                                        onBlur={e => { e.target.style.borderColor = 'var(--glass-border)'; e.target.style.background = 'rgba(255,255,255,0.02)'; }}
-                                    />
-                                </div>
-                            </div>
-
-                            <div>
-                                <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '8px', fontWeight: '600' }}>CONFIRM PASSWORD</label>
-                                <div style={{ position: 'relative' }}>
-                                    <Lock size={18} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                                    <input type="password" name="confirmPassword" value={formData.confirmPassword} onChange={handleChange} placeholder="••••••••"
-                                        style={{ width: '100%', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--glass-border)', padding: '14px 14px 14px 46px', borderRadius: '12px', color: '#fff', fontSize: '0.95rem', outline: 'none', transition: 'all 0.3s' }}
-                                        onFocus={e => { e.target.style.borderColor = 'var(--accent-secondary)'; e.target.style.background = 'rgba(255,255,255,0.04)'; }}
-                                        onBlur={e => { e.target.style.borderColor = 'var(--glass-border)'; e.target.style.background = 'rgba(255,255,255,0.02)'; }}
-                                    />
-                                </div>
-                            </div>
-
-                            <div style={{ gridColumn: 'span 2', display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
+                            {/* Internal Save Changes Button */}
+                            <div style={{ gridColumn: 'span 2', display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
                                 <motion.button type="submit"
                                     whileHover={{ scale: 1.02, boxShadow: '0 8px 25px rgba(255,255,255,0.2)' }}
                                     whileTap={{ scale: 0.98 }}
@@ -175,6 +222,91 @@ const ProfileDashboard = () => {
                                 </motion.button>
                             </div>
                         </form>
+                    </motion.div>
+
+                    {/* Security & Password Reset Section */}
+                    <motion.div variants={itemVariants} className="glass-panel" style={{ padding: '3rem', borderRadius: 'var(--radius-lg)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.5rem', paddingBottom: '1.5rem', borderBottom: '1px solid var(--glass-border)' }}>
+                            <Shield size={22} color="var(--accent-secondary)" />
+                            <h2 style={{ fontSize: '1.4rem', fontWeight: '700', margin: 0 }}>Security</h2>
+                        </div>
+
+                        {resetStep === 0 && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.02)', padding: '24px', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+                                <div>
+                                    <h3 style={{ fontSize: '1.1rem', fontWeight: '600', marginBottom: '8px' }}>Account Password</h3>
+                                    <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', margin: 0 }}>Request a reset code to securely change your password.</p>
+                                </div>
+                                <motion.button type="button" onClick={() => setResetStep(1)}
+                                    whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                                    style={{ background: 'var(--bg-surface)', border: '1px solid var(--outline-glow)', color: 'var(--text-main)', padding: '12px 24px', borderRadius: '10px', fontSize: '0.9rem', fontWeight: '600', cursor: 'pointer' }}
+                                >
+                                    Change Password
+                                </motion.button>
+                            </div>
+                        )}
+
+                        <AnimatePresence mode="wait">
+                            {resetStep > 0 && (
+                                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ overflow: 'hidden' }}>
+                                    <div style={{ background: 'rgba(255,255,255,0.02)', padding: '24px', borderRadius: '12px', border: '1px solid var(--outline-glow)' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+                                            <h3 style={{ fontSize: '1.1rem', fontWeight: '600', margin: 0, color: 'var(--accent-secondary)' }}>Secure Password Reset</h3>
+                                            <button onClick={() => { setResetStep(0); setResetError(''); setResetSuccess(''); }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '0.85rem', cursor: 'pointer', textDecoration: 'underline' }}>Cancel</button>
+                                        </div>
+
+                                        {resetSuccess && (
+                                            <div style={{ background: 'rgba(75, 255, 120, 0.1)', border: '1px solid rgba(75, 255, 120, 0.2)', color: 'var(--success)', padding: '12px 16px', borderRadius: '10px', fontSize: '0.85rem', marginBottom: '1.5rem', fontWeight: '600' }}>{resetSuccess}</div>
+                                        )}
+                                        {resetError && (
+                                            <div style={{ background: 'rgba(255, 75, 75, 0.1)', border: '1px solid rgba(255, 75, 75, 0.2)', color: 'var(--error)', padding: '12px 16px', borderRadius: '10px', fontSize: '0.85rem', marginBottom: '1.5rem', fontWeight: '600' }}>{resetError}</div>
+                                        )}
+
+                                        {resetStep === 1 && (
+                                            <form onSubmit={handleForgotPassword} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                                <div style={{ position: 'relative' }}>
+                                                    <Mail size={18} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                                                    <input name="email" type="email" placeholder="Confirm your Email" value={resetData.email} onChange={handleResetChange} required
+                                                        style={{ width: '100%', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', padding: '14px 14px 14px 46px', borderRadius: '10px', color: '#fff', fontSize: '0.95rem', outline: 'none' }}
+                                                    />
+                                                </div>
+                                                <motion.button type="submit" disabled={resetLoading} style={{ background: 'var(--accent-secondary)', color: '#fff', border: 'none', padding: '14px', borderRadius: '10px', fontSize: '0.95rem', fontWeight: '600', cursor: 'pointer' }}>
+                                                    {resetLoading ? 'Sending...' : 'Send Reset Code'}
+                                                </motion.button>
+                                            </form>
+                                        )}
+
+                                        {resetStep === 2 && (
+                                            <form onSubmit={handleVerifyCode} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                                <div style={{ position: 'relative' }}>
+                                                    <Lock size={18} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                                                    <input name="code" type="text" placeholder="Enter 6-digit Code" value={resetData.code} onChange={handleResetChange} required
+                                                        style={{ width: '100%', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', padding: '14px 14px 14px 46px', borderRadius: '10px', color: '#fff', fontSize: '0.95rem', outline: 'none', letterSpacing: '2px' }}
+                                                    />
+                                                </div>
+                                                <motion.button type="submit" disabled={resetLoading} style={{ background: 'var(--accent-secondary)', color: '#fff', border: 'none', padding: '14px', borderRadius: '10px', fontSize: '0.95rem', fontWeight: '600', cursor: 'pointer' }}>
+                                                    {resetLoading ? 'Verifying...' : 'Verify Code'}
+                                                </motion.button>
+                                            </form>
+                                        )}
+
+                                        {resetStep === 3 && (
+                                            <form onSubmit={handleResetPassword} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                                <div style={{ position: 'relative' }}>
+                                                    <Lock size={18} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                                                    <input name="newPassword" type="password" placeholder="Enter New Password" value={resetData.newPassword} onChange={handleResetChange} required
+                                                        style={{ width: '100%', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', padding: '14px 14px 14px 46px', borderRadius: '10px', color: '#fff', fontSize: '0.95rem', outline: 'none' }}
+                                                    />
+                                                </div>
+                                                <motion.button type="submit" disabled={resetLoading} style={{ background: 'var(--accent-secondary)', color: '#fff', border: 'none', padding: '14px', borderRadius: '10px', fontSize: '0.95rem', fontWeight: '600', cursor: 'pointer' }}>
+                                                    {resetLoading ? 'Updating...' : 'Set New Password'}
+                                                </motion.button>
+                                            </form>
+                                        )}
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
                     </motion.div>
                 </motion.div>
             </div>

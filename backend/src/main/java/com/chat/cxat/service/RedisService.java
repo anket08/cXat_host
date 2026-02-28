@@ -17,84 +17,145 @@ public class RedisService {
     }
 
     // ==========================
-    // 1️⃣ ONLINE USERS
-    // TTL = 5 minutes
+    // ONLINE USERS CACHE
+    // TTL = 5 min
     // ==========================
 
     public void setUserOnline(String username) {
+
         try {
-            String key = "online:" + username;
+
             redisTemplate.opsForValue().set(
-                    key,
+                    "online:" + username,
                     "true",
                     300,
-                    TimeUnit.SECONDS);
+                    TimeUnit.SECONDS
+            );
+
         } catch (Exception e) {
-            System.out.println("Redis SET online error: " + e.getMessage());
+
+            System.out.println("Redis SET online error: "
+                    + e.getMessage());
+
         }
     }
+
 
     public void setUserOffline(String username) {
+
         try {
-            redisTemplate.delete("online:" + username);
+
+            redisTemplate.delete(
+                    "online:" + username);
+
         } catch (Exception e) {
-            System.out.println("Redis DELETE online error: " + e.getMessage());
+
+            System.out.println("Redis DELETE error: "
+                    + e.getMessage());
+
         }
     }
 
+
     public boolean isUserOnline(String username) {
+
         try {
-            Boolean exists = redisTemplate.hasKey("online:" + username);
+
+            Boolean exists =
+                    redisTemplate.hasKey(
+                            "online:" + username);
+
             return exists != null && exists;
+
         } catch (Exception e) {
-            System.out.println("Redis HASKEY online error: " + e.getMessage());
+
+            System.out.println("Redis HASKEY error: "
+                    + e.getMessage());
+
             return false;
         }
     }
 
+
+
     // ==========================
-    // 2️⃣ CHAT CACHE
+    // CHAT CACHE
     // TTL = 1 hour
     // ==========================
-    // Store messages (TTL 1 hour)
+
+
     public void cacheMessages(
             String roomId,
             List<Message> messages) {
 
         try {
+
             redisTemplate.opsForValue().set(
                     "chat:" + roomId,
                     messages,
                     3600,
                     TimeUnit.SECONDS);
+
+            System.out.println("Redis SET chat:" + roomId);
+
         } catch (Exception e) {
-            System.out.println("Redis SET error: " + e.getMessage());
+
+            System.out.println("Redis SET error: "
+                    + e.getMessage());
+
         }
+
     }
 
-    // Get cached messages
-    public List<Message> getCachedMessages(String roomId) {
+
+
+    public List<Message> getCachedMessages(
+            String roomId) {
 
         try {
-            Object cached = redisTemplate.opsForValue().get("chat:" + roomId);
-            if (cached instanceof List) {
+
+            Object cached =
+                    redisTemplate.opsForValue()
+                            .get("chat:" + roomId);
+
+            if (cached != null) {
+
+                System.out.println("Redis HIT");
+
                 return (List<Message>) cached;
+
             }
+
         } catch (Exception e) {
-            System.out.println("Redis GET error: " + e.getMessage());
+
+            System.out.println("Redis GET error: "
+                    + e.getMessage());
+
         }
+
         return null;
     }
 
-    // Delete cache
-    public void deleteChatCache(String roomId) {
+
+
+    public void deleteChatCache(
+            String roomId) {
 
         try {
+
             redisTemplate.delete(
                     "chat:" + roomId);
+
+            System.out.println("Redis DELETE chat:"
+                    + roomId);
+
         } catch (Exception e) {
-            System.out.println("Redis DELETE error: " + e.getMessage());
+
+            System.out.println("Redis DELETE error: "
+                    + e.getMessage());
+
         }
+
     }
 
 }
