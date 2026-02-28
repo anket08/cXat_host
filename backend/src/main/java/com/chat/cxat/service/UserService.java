@@ -13,20 +13,14 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final MailService mailService;
-
-
 
     public UserService(
             UserRepository userRepository,
-            PasswordEncoder passwordEncoder,
-            MailService mailService){
+            PasswordEncoder passwordEncoder){
 
-        this.userRepository=userRepository;
-        this.passwordEncoder=passwordEncoder;
-        this.mailService=mailService;
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
     }
-
 
 
     /*
@@ -38,10 +32,9 @@ public class UserService {
     private String generateCode(){
 
         return String.valueOf(
-                100000+
+                100000 +
                 new Random().nextInt(900000)
         );
-
     }
 
 
@@ -59,7 +52,7 @@ public class UserService {
             throw new RuntimeException("Only Gmail allowed");
 
 
-        User temp=
+        User temp =
                 userRepository.findByEmail(
                         user.getEmail()
                 );
@@ -70,7 +63,7 @@ public class UserService {
             throw new RuntimeException("Verify OTP first");
 
 
-        long expiry=
+        long expiry =
                 Long.parseLong(
                         temp.getRegisterOtpExpiry()
                 );
@@ -84,7 +77,6 @@ public class UserService {
                 user.getUsername())
                 .isPresent())
             throw new RuntimeException("Username exists");
-
 
 
         temp.setUsername(
@@ -102,19 +94,7 @@ public class UserService {
         temp.setStatus("OFFLINE");
 
 
-        User saved=
-                userRepository.save(temp);
-
-
-
-        mailService.sendWelcomeEmail(
-                saved.getEmail(),
-                saved.getUsername(),
-                saved.getId()
-        );
-
-
-        return saved;
+        return userRepository.save(temp);
 
     }
 
@@ -128,7 +108,7 @@ public class UserService {
 
     public User login(User user){
 
-        User existing=
+        User existing =
                 userRepository
                         .findByUsername(
                                 user.getUsername()
@@ -140,14 +120,14 @@ public class UserService {
             return null;
 
 
-        boolean match=
+        boolean match =
                 passwordEncoder.matches(
                         user.getPassword(),
                         existing.getPassword()
                 );
 
 
-        return match?existing:null;
+        return match ? existing : null;
 
     }
 
@@ -159,10 +139,9 @@ public class UserService {
      =========================
      */
 
-    public String sendResetCode(
-            String email){
+    public String sendResetCode(String email){
 
-        User user=
+        User user =
                 userRepository
                         .findByEmail(email);
 
@@ -171,8 +150,7 @@ public class UserService {
             return "User not found";
 
 
-        String code=
-                generateCode();
+        String code = generateCode();
 
 
         user.setResetCode(code);
@@ -181,9 +159,8 @@ public class UserService {
         user.setResetCodeExpiry(
 
                 String.valueOf(
-
                         System.currentTimeMillis()
-                                +600000
+                        +600000
                 )
         );
 
@@ -191,13 +168,8 @@ public class UserService {
         userRepository.save(user);
 
 
-        mailService.sendResetCode(
-                email,
-                code
-        );
+        return code;   // ✅ OTP return for popup
 
-
-        return "Reset code sent";
     }
 
 
@@ -212,7 +184,7 @@ public class UserService {
             String email,
             String code){
 
-        User user=
+        User user =
                 userRepository
                         .findByEmail(email);
 
@@ -229,7 +201,7 @@ public class UserService {
             return "Invalid code";
 
 
-        long expiry=
+        long expiry =
                 Long.parseLong(
                         user.getResetCodeExpiry()
                 );
@@ -255,7 +227,7 @@ public class UserService {
             String code,
             String password){
 
-        User user=
+        User user =
                 userRepository
                         .findByEmail(email);
 
@@ -264,12 +236,11 @@ public class UserService {
             return "User not found";
 
 
-        if(!code.equals(
-                user.getResetCode()))
+        if(!code.equals(user.getResetCode()))
             return "Invalid code";
 
 
-        long expiry=
+        long expiry =
                 Long.parseLong(
                         user.getResetCodeExpiry()
                 );
@@ -280,9 +251,7 @@ public class UserService {
 
 
         user.setPassword(
-                passwordEncoder.encode(
-                        password
-                )
+                passwordEncoder.encode(password)
         );
 
 
@@ -305,29 +274,27 @@ public class UserService {
      =========================
      */
 
-    public String sendRegisterOtp(
-            String email){
+    public String sendRegisterOtp(String email){
 
         if(email==null ||
            !email.endsWith("@gmail.com"))
             return "Only Gmail allowed";
 
 
-        String code=
+        String code =
                 generateCode();
 
 
-        User user=
+        User user =
                 userRepository
                         .findByEmail(email);
 
 
         if(user==null){
 
-            user=new User();
+            user = new User();
 
             user.setEmail(email);
-
         }
 
 
@@ -337,9 +304,8 @@ public class UserService {
         user.setRegisterOtpExpiry(
 
                 String.valueOf(
-
                         System.currentTimeMillis()
-                                +600000
+                        +600000
                 )
         );
 
@@ -347,13 +313,8 @@ public class UserService {
         userRepository.save(user);
 
 
-        mailService.sendRegisterOtp(
-                email,
-                code
-        );
+        return code;   // ✅ OTP return for popup
 
-
-        return "OTP Sent";
     }
 
 
@@ -368,7 +329,7 @@ public class UserService {
             String email,
             String code){
 
-        User user=
+        User user =
                 userRepository
                         .findByEmail(email);
 
@@ -377,12 +338,11 @@ public class UserService {
             return "User not found";
 
 
-        if(!code.equals(
-                user.getRegisterOtp()))
+        if(!code.equals(user.getRegisterOtp()))
             return "Invalid OTP";
 
 
-        long expiry=
+        long expiry =
                 Long.parseLong(
                         user.getRegisterOtpExpiry()
                 );

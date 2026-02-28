@@ -22,6 +22,10 @@ const Login = ({ onLogin }) => {
     const [resetData, setResetData] = useState({ email: '', code: '', newPassword: '' });
     const [successMsg, setSuccessMsg] = useState('');
 
+    // OTP Popup State
+    const [showOtpPopup, setShowOtpPopup] = useState(false);
+    const [generatedOtp, setGeneratedOtp] = useState('');
+
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
         setError('');
@@ -82,13 +86,13 @@ const Login = ({ onLogin }) => {
         try {
             const response = await axios.post(`${import.meta.env.VITE_API_URL}/auth/send-otp?email=${formData.email}`);
             await minLoadTime(startTime);
-            if (response.status === 200) {
-                if (response.data === "OTP Sent") {
-                    setSuccessMsg("Verification OTP sent to your email.");
-                    setRegisterStep(1);
-                } else {
-                    setError(response.data || 'Failed to send OTP.');
-                }
+            if (response.status === 200 && response.data?.otp) {
+                setGeneratedOtp(response.data.otp);
+                setShowOtpPopup(true);
+                setSuccessMsg("Verification OTP generated successfully.");
+                setRegisterStep(1);
+            } else {
+                setError('Failed to generate OTP.');
             }
         } catch (err) {
             await minLoadTime(startTime);
@@ -146,8 +150,10 @@ const Login = ({ onLogin }) => {
         try {
             const response = await axios.post(`${import.meta.env.VITE_API_URL}/auth/forgot?email=${resetData.email}`);
             await minLoadTime(startTime);
-            if (response.status === 200) {
-                setSuccessMsg("Reset code sent to your email.");
+            if (response.status === 200 && response.data?.otp) {
+                setGeneratedOtp(response.data.otp);
+                setShowOtpPopup(true);
+                setSuccessMsg("Reset code generated successfully.");
                 setResetStep(2);
             }
         } catch (err) {
@@ -467,6 +473,46 @@ const Login = ({ onLogin }) => {
                     </>
                 )}
             </div>
+
+            {/* Simulated Email Popup */}
+            <AnimatePresence>
+                {showOtpPopup && (
+                    <motion.div
+                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        style={{ position: 'absolute', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        onClick={() => setShowOtpPopup(false)}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                            style={{ background: 'var(--bg-base)', border: '1px solid var(--glass-border)', padding: '2.5rem 2rem', borderRadius: '20px', maxWidth: '380px', width: '100%', textAlign: 'center', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', position: 'relative', margin: '0 20px' }}
+                            onClick={e => e.stopPropagation()}
+                        >
+                            <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--glass-border)', borderRadius: '50%', width: '64px', height: '64px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem', boxShadow: '0 0 20px rgba(121, 192, 255, 0.1)' }}>
+                                <Mail size={28} color="var(--accent-primary)" />
+                            </div>
+                            <h3 style={{ fontSize: '1.3rem', fontWeight: '800', marginBottom: '0.5rem', color: 'var(--text-main)', letterSpacing: '-0.5px' }}>Incoming Mail</h3>
+                            <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '1.5rem', lineHeight: '1.6' }}>
+                                You have received a new secure code from the <strong style={{ color: 'var(--text-main)' }}>CXAT System</strong>.
+                            </p>
+
+                            <div style={{ background: 'rgba(121, 192, 255, 0.05)', border: '1px dashed rgba(121, 192, 255, 0.3)', padding: '1.5rem', borderRadius: '12px', marginBottom: '1.5rem', display: 'inline-block', width: '100%' }}>
+                                <span style={{ fontSize: '2.5rem', letterSpacing: '8px', fontWeight: '900', fontFamily: 'monospace', color: 'var(--text-main)', display: 'block', marginLeft: '8px' }}>
+                                    {generatedOtp}
+                                </span>
+                            </div>
+
+                            <motion.button
+                                onClick={() => setShowOtpPopup(false)}
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                                style={{ width: '100%', padding: '14px', background: 'var(--text-main)', color: 'var(--bg-base)', border: 'none', borderRadius: '12px', fontWeight: '700', fontSize: '0.95rem', cursor: 'pointer', transition: 'all 0.3s ease', boxShadow: '0 4px 14px 0 rgba(255,255,255,0.1)' }}
+                            >
+                                Copy & Close
+                            </motion.button>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </motion.div>
     );
 };

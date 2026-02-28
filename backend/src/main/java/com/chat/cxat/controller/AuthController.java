@@ -2,7 +2,10 @@ package com.chat.cxat.controller;
 
 import com.chat.cxat.model.User;
 import com.chat.cxat.service.UserService;
+
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
 
 @RestController
 @RequestMapping("/auth")
@@ -14,9 +17,10 @@ public class AuthController {
         this.userService = userService;
     }
 
+
     /*
      =========================
-     HEALTH CHECK (Render)
+     HEALTH CHECK
      =========================
     */
 
@@ -29,17 +33,21 @@ public class AuthController {
 
     /*
      =========================
-     SEND OTP BEFORE REGISTER
-     Only Gmail allowed
+     SEND REGISTER OTP
+     Popup Version
      =========================
     */
 
     @PostMapping("/send-otp")
-    public String sendRegisterOtp(
+    public Map<String,String> sendRegisterOtp(
             @RequestParam String email){
 
-        return userService
-                .sendRegisterOtp(email);
+        String code =
+                userService.sendRegisterOtp(email);
+
+        return Map.of(
+                "otp",code
+        );
     }
 
 
@@ -68,7 +76,6 @@ public class AuthController {
     /*
      =========================
      REGISTER USER
-     OTP verified required
      =========================
     */
 
@@ -98,23 +105,28 @@ public class AuthController {
 
     /*
      =========================
-     FORGOT PASSWORD
-     Send OTP
+     SEND RESET OTP
+     Popup Version
      =========================
     */
 
     @PostMapping("/forgot")
-    public String forgotPassword(
+    public Map<String,String> forgotPassword(
             @RequestParam String email){
 
-        return userService.sendResetCode(email);
+        String code =
+                userService.sendResetCode(email);
+
+        return Map.of(
+                "otp",code
+        );
     }
 
 
 
     /*
      =========================
-     VERIFY FORGOT OTP
+     VERIFY RESET OTP
      =========================
     */
 
