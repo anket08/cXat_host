@@ -77,7 +77,7 @@ const LandingPage = () => {
             </AnimatePresence>
 
             {/* Navbar area */}
-            <nav style={{ padding: '16px 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'fixed', top: 0, width: '100%', zIndex: 100, background: 'rgba(13, 17, 23, 0.8)', backdropFilter: 'blur(12px)', borderBottom: '1px solid #30363d' }}>
+            <nav style={{ padding: '16px 5%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'fixed', top: 0, width: '100%', zIndex: 100, background: 'rgba(13, 17, 23, 0.8)', backdropFilter: 'blur(12px)', borderBottom: '1px solid #30363d' }}>
                 <div
                     style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', fontSize: '1.5rem', color: '#fff', cursor: 'pointer', position: 'relative' }}
                     onClick={() => navigate('/')}
@@ -133,10 +133,10 @@ const LandingPage = () => {
                     Fast, agile messaging inspired by the speed of the cat family.
                 </motion.p>
 
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.5 }} style={{ marginTop: '40px', display: 'flex', gap: '16px' }}>
-                    <div style={{ background: '#fff', borderRadius: '6px', padding: '4px', display: 'flex', boxShadow: '0 8px 24px rgba(112,0,255,0.2)' }}>
-                        <input type="text" placeholder="Enter cXat Id" value={usernameInput} onChange={(e) => setUsernameInput(e.target.value)} style={{ border: 'none', background: 'transparent', padding: '12px 16px', color: '#000', outline: 'none', fontSize: '1.1rem', minWidth: '280px' }} />
-                        <button onClick={() => navigate('/login', { state: { username: usernameInput } })} style={{ background: '#7000ff', color: '#fff', border: 'none', borderRadius: '6px', padding: '12px 24px', fontWeight: 'bold', fontSize: '1rem', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 0 20px rgba(112,0,255,0.5)' }}>
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.5 }} style={{ marginTop: '40px', width: '100%', maxWidth: '500px' }}>
+                    <div className="landing-hero-input-group">
+                        <input className="landing-hero-input" type="text" placeholder="Enter cXat Id" value={usernameInput} onChange={(e) => setUsernameInput(e.target.value)} />
+                        <button className="landing-hero-btn" onClick={() => navigate('/login', { state: { username: usernameInput } })}>
                             Login to cXat
                         </button>
                     </div>
@@ -150,7 +150,7 @@ const LandingPage = () => {
                         <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#27c93f' }} />
                         <div style={{ marginLeft: '16px', color: '#8b949e', fontSize: '0.8rem', fontFamily: 'monospace' }}>terminal - cXat-secure</div>
                     </div>
-                    <div style={{ padding: '24px', fontFamily: 'monospace', fontSize: '0.9rem', color: '#c9d1d9', lineHeight: 1.6, overflowX: 'auto' }}>
+                    <div className="landing-code-box" style={{ background: 'transparent' }}>
                         <div style={{ color: '#79c0ff' }}> Connecting to secure relay...</div>
                         <div style={{ color: '#3fb950' }}>[OK] Handshake established (AES-256)</div>
                         <div style={{ color: '#d2a8ff' }}>[SYS] Allocating private channel '349X'</div>
@@ -163,10 +163,10 @@ const LandingPage = () => {
             </header>
 
             {/* Content with Timeline */}
-            <div style={{ position: 'relative', display: 'flex', maxWidth: '1200px', margin: '0 auto', padding: '0 20px' }}>
+            <div className="landing-timeline-container">
 
                 {/* Fixed Timeline Column */}
-                <div style={{ position: 'relative', width: '100px', flexShrink: 0, display: 'flex', justifyContent: 'center' }}>
+                <div className="landing-timeline-rail">
                     {/* The Rail */}
                     <div style={{ position: 'absolute', top: 0, bottom: 0, width: '2px', background: '#30363d' }}>
                         {/* The Glowing progress line */}
@@ -175,7 +175,7 @@ const LandingPage = () => {
                 </div>
 
                 {/* Scrollytelling Sections */}
-                <div style={{ flex: 1, paddingBottom: '20vh' }}>
+                <div style={{ flex: 1, paddingBottom: '20vh', minWidth: 0 }}>
                     {/* Section 1: BCrypt */}
                     <Section
                         icon={<Lock size={24} color="#3fb950" />}
@@ -407,13 +407,13 @@ const Section = ({ title, subtitle, text, icon, visual }) => {
     return (
         <div ref={ref} style={{ padding: '80px 0', position: 'relative' }}>
             {/* Timeline Node Glow inside the section container relative to timeline */}
-            <motion.div initial={{ scale: 0, opacity: 0 }} animate={isInView ? { scale: 1, opacity: 1 } : {}} transition={{ duration: 0.5, delay: 0.2 }} style={{ position: 'absolute', top: '90px', left: '-68px', width: '36px', height: '36px', background: '#0d1117', border: '2px solid #30363d', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
+            <motion.div initial={{ scale: 0, opacity: 0 }} animate={isInView ? { scale: 1, opacity: 1 } : {}} transition={{ duration: 0.5, delay: 0.2 }} className="landing-timeline-node">
                 {icon}
             </motion.div>
 
-            <motion.div initial={{ opacity: 0, y: 30 }} animate={isInView ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.8 }} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <motion.div initial={{ opacity: 0, y: 30 }} animate={isInView ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.8 }} style={{ display: 'flex', flexDirection: 'column', gap: '16px', minWidth: 0 }}>
                 <div style={{ color: '#8b949e', fontSize: '1.25rem', fontWeight: '600' }}>{subtitle}</div>
-                <h2 style={{ fontSize: '2.5rem', fontWeight: '800', color: '#fff', lineHeight: 1.2, maxWidth: '600px' }}>{title}</h2>
+                <h2 className="landing-title">{title}</h2>
                 <p style={{ color: '#c9d1d9', fontSize: '1.2rem', lineHeight: 1.6, maxWidth: '600px', marginBottom: '32px' }}>{text}</p>
                 {visual}
             </motion.div>
@@ -422,13 +422,13 @@ const Section = ({ title, subtitle, text, icon, visual }) => {
 };
 
 const CodeBox = ({ title, content, color = "#79c0ff" }) => (
-    <div style={{ background: '#161b22', border: '1px solid #30363d', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', maxWidth: '700px' }}>
+    <div style={{ background: '#161b22', border: '1px solid #30363d', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', maxWidth: '700px', width: '100%' }}>
         <div style={{ padding: '12px 16px', borderBottom: '1px solid #30363d', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontSize: '0.85rem', fontWeight: '600', color: '#8b949e', display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <Terminal size={14} color={color} /> {title}
             </span>
         </div>
-        <div style={{ padding: '24px', fontFamily: 'monospace', fontSize: '0.9rem', lineHeight: 1.6, overflowX: 'auto', background: '#0d1117' }}>
+        <div className="landing-code-box">
             {content}
         </div>
     </div>

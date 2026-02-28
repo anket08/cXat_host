@@ -95,6 +95,147 @@ select {
   }
 }
 
+/* --- Responsive Landing Page --- */
+.landing-hero-input-group {
+  background: #fff;
+  border-radius: 6px;
+  padding: 6px;
+  display: flex;
+  box-shadow: 0 8px 24px rgba(112, 0, 255, 0.2);
+  width: 100%;
+  margin: 0 auto;
+}
+
+.landing-hero-input {
+  border: none;
+  background: transparent;
+  padding: 12px 16px;
+  color: #000;
+  outline: none;
+  font-size: 1.1rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.landing-hero-btn {
+  background: #7000ff;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 12px 24px;
+  font-weight: bold;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 0 20px rgba(112, 0, 255, 0.5);
+  white-space: nowrap;
+}
+
+.landing-hero-btn:hover {
+  box-shadow: 0 0 30px rgba(112, 0, 255, 0.8);
+}
+
+.landing-timeline-container {
+  position: relative;
+  display: flex;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.landing-timeline-rail {
+  position: relative;
+  width: 100px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+}
+
+.landing-timeline-node {
+  position: absolute;
+  top: 90px;
+  left: -68px;
+  width: 36px;
+  height: 36px;
+  background: #0d1117;
+  border: 2px solid #30363d;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.landing-title {
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.2;
+  max-width: 600px;
+}
+
+.landing-code-box {
+  padding: 24px;
+  font-family: monospace;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  overflow-x: auto;
+  background: #0d1117;
+  color: #c9d1d9;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 768px) {
+  .landing-hero-input-group {
+    flex-direction: row;
+    padding: 4px;
+    background: #fff;
+    box-shadow: 0 4px 15px rgba(112, 0, 255, 0.2);
+  }
+
+  .landing-hero-input {
+    padding: 10px 12px;
+    font-size: 0.95rem;
+    background: transparent;
+    text-align: left;
+  }
+
+  .landing-hero-btn {
+    width: auto;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+  }
+
+  .landing-timeline-container {
+    padding: 0 10px;
+  }
+
+  .landing-timeline-rail {
+    width: 40px;
+  }
+
+  .landing-timeline-node {
+    left: -35px;
+    width: 30px;
+    height: 30px;
+  }
+
+  .landing-timeline-node svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .landing-title {
+    font-size: 1.8rem;
+  }
+
+  .landing-code-box {
+    font-size: 0.8rem;
+    padding: 16px;
+  }
+}
+
 /* Global Navbar */
 .global-navbar {
   position: fixed;
