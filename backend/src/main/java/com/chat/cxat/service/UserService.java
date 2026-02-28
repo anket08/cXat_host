@@ -25,13 +25,20 @@ public class UserService {
     // =========================
     public User register(User user) {
 
-        // Hash password before saving
-        user.setPassword(
-                passwordEncoder.encode(user.getPassword())
-        );
+    System.out.println("REGISTER REQUEST: " + user.getUsername());
 
-        return userRepository.save(user);
+    if(userRepository.findByUsername(user.getUsername()).isPresent()){
+        throw new RuntimeException("Username already exists");
     }
+
+    user.setPassword(passwordEncoder.encode(user.getPassword()));
+
+    User saved = userRepository.save(user);
+
+    System.out.println("USER SAVED: " + saved.getUsername());
+
+    return saved;
+}
 
 
     // =========================

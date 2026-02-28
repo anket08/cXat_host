@@ -58,7 +58,8 @@ const Chat = ({ user, activeRoom: propActiveRoom, onLeaveRoom }) => {
                     return [...prev, message];
                 });
 
-                if (String(message.senderId) !== String(user.id)) {
+                const isMe = String(message.senderId) === String(user.id) || String(message.senderId) === String(user.username);
+                if (!isMe) {
                     client.send("/app/read", {}, JSON.stringify({ roomId: activeRoom, userId: user.id }));
                 }
             });
@@ -80,7 +81,10 @@ const Chat = ({ user, activeRoom: propActiveRoom, onLeaveRoom }) => {
             if (Array.isArray(res.data)) {
                 setMessages(res.data);
 
-                const hasUnreadFromOthers = res.data.some(m => !m.read && String(m.senderId) !== String(user.id));
+                const hasUnreadFromOthers = res.data.some(m => {
+                    const isMe = String(m.senderId) === String(user.id) || String(m.senderId) === String(user.username);
+                    return !m.read && !isMe;
+                });
                 if (hasUnreadFromOthers && stompClientRef.current?.connected) {
                     stompClientRef.current.send("/app/read", {}, JSON.stringify({ roomId: activeRoom, userId: user.id }));
                 }

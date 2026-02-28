@@ -36,15 +36,10 @@ const Login = ({ onLogin }) => {
                 password: formData.password
             });
             await minLoadTime(startTime);
-            if (response.status === 200) {
-                try {
-                    const userResponse = await axios.get(`${import.meta.env.VITE_API_URL}/auth/user/${formData.username}`);
-                    onLogin(userResponse.data);
-                } catch (fetchError) {
-                    onLogin({ username: formData.username, id: Date.now() });
-                }
+            if (response.status === 200 && response.data) {
+                onLogin(response.data);
             } else {
-                setError(response.data);
+                setError(response.data || 'Login failed.');
             }
         } catch (err) {
             await minLoadTime(startTime);
