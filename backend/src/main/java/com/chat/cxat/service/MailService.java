@@ -2,6 +2,7 @@ package com.chat.cxat.service;
 
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -13,41 +14,56 @@ public class MailService {
         this.mailSender = mailSender;
     }
 
-    public boolean sendResetCode(
-            String email,
-            String code) {
+    /*
+     =========================
+     SEND RESET OTP
+     =========================
+     */
 
-        try {
+    @Async
+    public void sendResetCode(String email,String code){
 
-            SimpleMailMessage mail = new SimpleMailMessage();
+        try{
+
+            SimpleMailMessage mail =
+                    new SimpleMailMessage();
 
             mail.setFrom("cxat.app@gmail.com");
+
+            mail.setReplyTo("cxat.app@gmail.com");
 
             mail.setTo(email);
 
             mail.setSubject(
-                    "CXAT Password Reset");
+                    "CXAT Password Reset Code"
+            );
 
             mail.setText(
-                    "Your CXAT password reset code is:\n\n"
-                            + code +
-                            "\n\nThis code expires in 10 minutes.");
+
+                    "Your CXAT password reset code:\n\n"
+
+                    + code +
+
+                    "\n\nValid for 10 minutes.\n\n"
+
+                    + "CXAT Team"
+
+            );
 
             mailSender.send(mail);
 
-            System.out.println("MAIL SENT");
-
-            return true;
+            System.out.println(
+                    "RESET MAIL SENT"
+            );
 
         }
 
-        catch (Exception e) {
+        catch(Exception e){
 
             System.out.println(
-                    "MAIL ERROR: "
-                            + e.getMessage());
-
-            return false;
+                    "RESET MAIL ERROR: "
+                            + e.getMessage()
+            );
         }
 
     }
@@ -55,28 +71,88 @@ public class MailService {
 
 
     /*
-     =============================
-     SEND WELCOME EMAIL
-     =============================
-    */
+     =========================
+     SEND REGISTER OTP
+     =========================
+     */
 
-    public boolean sendWelcomeEmail(
+    @Async
+    public void sendRegisterOtp(
             String email,
-            String username,
-            String userId
-    ) {
+            String code){
 
-        try {
+        try{
 
             SimpleMailMessage mail =
                     new SimpleMailMessage();
 
             mail.setFrom("cxat.app@gmail.com");
 
+            mail.setReplyTo("cxat.app@gmail.com");
+
             mail.setTo(email);
 
             mail.setSubject(
-                    "Welcome to CXAT Chat App"
+                    "CXAT Email Verification OTP"
+            );
+
+            mail.setText(
+
+                    "Your CXAT verification code:\n\n"
+
+                    + code +
+
+                    "\n\nValid for 10 minutes.\n\n"
+
+                    + "CXAT Team"
+
+            );
+
+            mailSender.send(mail);
+
+            System.out.println(
+                    "REGISTER OTP SENT"
+            );
+
+        }
+
+        catch(Exception e){
+
+            System.out.println(
+                    "REGISTER OTP ERROR: "
+                            + e.getMessage()
+            );
+        }
+
+    }
+
+
+
+    /*
+     =========================
+     SEND WELCOME MAIL
+     =========================
+     */
+
+    @Async
+    public void sendWelcomeEmail(
+            String email,
+            String username,
+            String userId){
+
+        try{
+
+            SimpleMailMessage mail =
+                    new SimpleMailMessage();
+
+            mail.setFrom("cxat.app@gmail.com");
+
+            mail.setReplyTo("cxat.app@gmail.com");
+
+            mail.setTo(email);
+
+            mail.setSubject(
+                    "Welcome to CXAT Chat"
             );
 
             mail.setText(
@@ -89,85 +165,34 @@ public class MailService {
                     + "User ID: "
                     + userId + "\n\n"
 
+                    + "Rules:\n"
 
-                    + "Terms & Conditions:\n"
-
-                    + "1. Do not spam\n"
+                    + "1. No spam\n"
                     + "2. No abuse\n"
-                    + "3. Respect other users\n"
-                    + "4. Data stored securely\n\n"
-
+                    + "3. Respect users\n\n"
 
                     + "Enjoy chatting!\n\n"
 
                     + "CXAT Team"
+
             );
 
             mailSender.send(mail);
 
             System.out.println(
-                    "Welcome Mail Sent"
+                    "WELCOME MAIL SENT"
             );
 
-            return true;
+        }
 
-        } catch (Exception e) {
+        catch(Exception e){
 
             System.out.println(
                     "WELCOME MAIL ERROR: "
-                    + e.getMessage()
+                            + e.getMessage()
             );
-
-            return false;
         }
+
     }
-    /*
- ============================
- SEND REGISTER OTP
- ============================
-*/
 
-public boolean sendRegisterOtp(
-        String email,
-        String code){
-
-    try{
-
-        SimpleMailMessage mail =
-                new SimpleMailMessage();
-
-        mail.setFrom("cxat.app@gmail.com");
-
-        mail.setTo(email);
-
-        mail.setSubject(
-                "CXAT Email Verification OTP"
-        );
-
-        mail.setText(
-
-                "Your CXAT Verification OTP:\n\n"
-
-                + code +
-
-                "\n\nValid for 10 minutes."
-
-        );
-
-        mailSender.send(mail);
-
-        System.out.println("Register OTP Sent");
-
-        return true;
-
-    }catch(Exception e){
-
-        System.out.println(
-                "OTP MAIL ERROR: "
-                + e.getMessage()
-        );
-
-        return false;
-    }
-}
 }

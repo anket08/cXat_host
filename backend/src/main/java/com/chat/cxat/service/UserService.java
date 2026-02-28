@@ -11,409 +11,448 @@ import java.util.Random;
 @Service
 public class UserService {
 
-        /*
-         * ==============================
-         * DEPENDENCIES
-         * ==============================
-         */
+    /*
+     =========================
+     DEPENDENCIES
+     =========================
+     */
 
-        private final UserRepository userRepository;
-        private final PasswordEncoder passwordEncoder;
-        private final MailService mailService;
-
-        /*
-         * ==============================
-         * CONSTRUCTOR INJECTION
-         * ==============================
-         */
-
-        public UserService(
-                        UserRepository userRepository,
-                        PasswordEncoder passwordEncoder,
-                        MailService mailService) {
-                this.userRepository = userRepository;
-                this.passwordEncoder = passwordEncoder;
-                this.mailService = mailService;
-        }
-
-        /*
-         * ==============================
-         * REGISTER USER
-         * ==============================
-         */
-public User register(User user) {
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final MailService mailService;
 
     /*
-     Gmail validation
-    */
+     =========================
+     CONSTRUCTOR
+     =========================
+     */
 
-    if(!user.getEmail()
-            .endsWith("@gmail.com")){
+    public UserService(
+            UserRepository userRepository,
+            PasswordEncoder passwordEncoder,
+            MailService mailService) {
 
-        throw new RuntimeException(
-                "Only Gmail allowed"
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.mailService = mailService;
+    }
+
+
+    /*
+     =========================
+     GENERATE OTP
+     =========================
+     */
+
+    private String generateCode(){
+
+        int code =
+                100000 +
+                new Random().nextInt(900000);
+
+        return String.valueOf(code);
+    }
+
+
+    /*
+     =========================
+     REGISTER USER
+     =========================
+     */
+
+    public User register(User user){
+
+        // Gmail validation
+
+        if(user.getEmail()==null ||
+           !user.getEmail().endsWith("@gmail.com")){
+
+            throw new RuntimeException(
+                    "Only Gmail allowed"
+            );
+        }
+
+
+        User existingEmail =
+                userRepository
+                .findByEmail(user.getEmail());
+
+
+        if(existingEmail==null){
+
+            throw new RuntimeException(
+                    "Verify OTP first"
+            );
+        }
+
+
+        // OTP verified check
+
+        if(existingEmail.getRegisterOtp()==null){
+
+            throw new RuntimeException(
+                    "Verify OTP first"
+            );
+        }
+
+
+        long expiry =
+                Long.parseLong(
+                existingEmail.getRegisterOtpExpiry()
         );
-    }
 
 
-    /*
-     Duplicate Email Check
-    */
+        if(System.currentTimeMillis()>expiry){
 
-    User emailUser =
-            userRepository
-            .findByEmail(user.getEmail());
+            throw new RuntimeException(
+                    "OTP expired"
+            );
+        }
 
-    if(emailUser != null &&
-       emailUser.getUsername()!=null){
 
-        throw new RuntimeException(
-                "Email already registered"
+        // Username exists
+
+        if(userRepository
+                .findByUsername(
+                        user.getUsername())
+                .isPresent()){
+
+            throw new RuntimeException(
+                    "Username exists"
+            );
+        }
+
+
+
+        /*
+         Encrypt password
+        */
+
+        existingEmail.setUsername(
+                user.getUsername());
+
+        existingEmail.setPassword(
+
+                passwordEncoder.encode(
+                        user.getPassword()
+        ));
+
+        existingEmail.setStatus("OFFLINE");
+
+
+        User saved =
+                userRepository.save(
+                        existingEmail);
+
+
+
+        /*
+         Welcome Email (Async)
+        */
+
+        mailService.sendWelcomeEmail(
+
+                saved.getEmail(),
+                saved.getUsername(),
+                saved.getId()
+
         );
+
+
+        return saved;
     }
 
 
 
     /*
-     Username Exists Check
-    */
+     =========================
+     LOGIN
+     =========================
+     */
 
-    if(userRepository
-            .findByUsername(
-                    user.getUsername())
-            .isPresent()){
+    public User login(User user){
 
-        throw new RuntimeException(
-                "Username exists"
+        User existing =
+                userRepository
+                .findByUsername(
+                        user.getUsername())
+                .orElse(null);
+
+        if(existing==null)
+            return null;
+
+
+        boolean match =
+                passwordEncoder.matches(
+                        user.getPassword(),
+                        existing.getPassword()
         );
+
+
+        return match ? existing : null;
     }
 
 
 
     /*
-     OTP Verified Check
-    */
+     =========================
+     FIND USER
+     =========================
+     */
 
-    User tempUser =
-            userRepository
-            .findByEmail(user.getEmail());
+    public User findByUsername(
+            String username){
 
-    if(tempUser==null ||
-       tempUser.getRegisterOtp()==null){
+        return userRepository
+                .findByUsername(username)
+                .orElse(null);
+    }
 
-        throw new RuntimeException(
-                "Verify OTP first"
+
+
+    /*
+     =========================
+     SEND RESET OTP
+     =========================
+     */
+
+    public String sendResetCode(
+            String email){
+
+        User user =
+                userRepository
+                .findByEmail(email);
+
+        if(user==null)
+            return "User not found";
+
+
+        String code =
+                generateCode();
+
+
+        user.setResetCode(code);
+
+
+        user.setResetCodeExpiry(
+
+                String.valueOf(
+
+                System.currentTimeMillis()
+                +600000
+
+        ));
+
+
+        userRepository.save(user);
+
+
+        mailService.sendResetCode(
+                email,
+                code
         );
+
+
+        return "Reset code sent";
     }
 
 
 
     /*
-     Encrypt Password
-    */
+     =========================
+     VERIFY RESET OTP
+     =========================
+     */
 
-    user.setPassword(
+    public String verifyCode(
+            String email,
+            String code){
 
-            passwordEncoder.encode(
-                    user.getPassword()
-    ));
+        User user =
+                userRepository
+                .findByEmail(email);
+
+        if(user==null)
+            return "User not found";
 
 
-    user.setStatus("OFFLINE");
+        if(user.getResetCode()==null)
+            return "No reset request";
 
 
-    User saved =
-            userRepository.save(user);
+        if(!user.getResetCode().equals(code))
+            return "Invalid code";
+
+
+        long expiry =
+                Long.parseLong(
+                user.getResetCodeExpiry()
+        );
+
+
+        if(System.currentTimeMillis()>expiry)
+            return "Code expired";
+
+
+        return "Verified";
+    }
 
 
 
     /*
-     Welcome Email
-    */
+     =========================
+     RESET PASSWORD
+     =========================
+     */
 
-    mailService.sendWelcomeEmail(
+    public String resetPassword(
 
-            saved.getEmail(),
+            String email,
+            String code,
+            String newPassword){
 
-            saved.getUsername(),
+        User user =
+                userRepository
+                .findByEmail(email);
 
-            saved.getId()
+        if(user==null)
+            return "User not found";
 
-    );
+
+        if(user.getResetCode()==null)
+            return "No reset request";
 
 
-    return saved;
-}
-        /*
-         * ==============================
-         * LOGIN USER
-         * ==============================
-         */
+        if(!user.getResetCode().equals(code))
+            return "Invalid code";
 
-        public User login(User user) {
 
-                User existing = userRepository
-                                .findByUsername(user.getUsername())
-                                .orElse(null);
+        long expiry =
+                Long.parseLong(
+                user.getResetCodeExpiry()
+        );
 
-                if (existing == null)
-                        return null;
 
-                boolean match = passwordEncoder.matches(
-                                user.getPassword(),
-                                existing.getPassword());
+        if(System.currentTimeMillis()>expiry)
+            return "Code expired";
 
-                return match ? existing : null;
-        }
 
-        /*
-         * ==============================
-         * FIND USER
-         * ==============================
-         */
+        user.setPassword(
 
-        public User findByUsername(String username) {
+                passwordEncoder.encode(
+                        newPassword
+        ));
 
-                return userRepository
-                                .findByUsername(username)
-                                .orElse(null);
-        }
 
-        /*
-         * ==============================
-         * GENERATE OTP CODE
-         * ==============================
-         */
+        user.setResetCode(null);
+        user.setResetCodeExpiry(null);
 
-        private String generateCode() {
 
-                int code = 100000 +
-                                new Random().nextInt(900000);
+        userRepository.save(user);
 
-                return String.valueOf(code);
-        }
 
-        /*
-         * ==============================
-         * SEND RESET CODE (FORGOT PASSWORD)
-         * ==============================
-         */
-
-        public String sendResetCode(String email) {
-
-                User user = userRepository.findByEmail(email);
-
-                if (user == null)
-                        return "User not found";
-
-                /*
-                 * Generate 6 digit OTP
-                 */
-
-                String code = generateCode();
-
-                /*
-                 * Expiry time = 10 minutes
-                 */
-
-                String expiry = String.valueOf(
-                                System.currentTimeMillis()
-                                                + 600000);
-
-                /*
-                 * Save OTP inside User
-                 */
-
-                user.setResetCode(code);
-                user.setResetCodeExpiry(expiry);
-
-                userRepository.save(user);
-
-                /*
-                 * Send Email
-                 */
-
-                mailService.sendResetCode(
-                                email,
-                                code);
-
-                return "Reset code sent";
-        }
-
-        /*
-         * ==============================
-         * VERIFY OTP CODE
-         * ==============================
-         */
-
-        public String verifyCode(
-                        String email,
-                        String code) {
-
-                User user = userRepository.findByEmail(email);
-
-                if (user == null)
-                        return "User not found";
-
-                if (user.getResetCode() == null)
-                        return "No reset request";
-
-                if (!user.getResetCode().equals(code))
-                        return "Invalid code";
-
-                long expiry = Long.parseLong(
-                                user.getResetCodeExpiry());
-
-                if (System.currentTimeMillis() > expiry)
-                        return "Code expired";
-
-                return "Code verified";
-        }
-
-        /*
-         * ==============================
-         * RESET PASSWORD
-         * ==============================
-         */
-
-        public String resetPassword(
-                        String email,
-                        String code,
-                        String newPassword) {
-
-                User user = userRepository.findByEmail(email);
-
-                if (user == null)
-                        return "User not found";
-
-                if (user.getResetCode() == null)
-                        return "No reset request";
-
-                if (!user.getResetCode().equals(code))
-                        return "Invalid code";
-
-                long expiry = Long.parseLong(
-                                user.getResetCodeExpiry());
-
-                if (System.currentTimeMillis() > expiry)
-                        return "Code expired";
-
-                /*
-                 * Update Password
-                 */
-
-                user.setPassword(
-                                passwordEncoder.encode(
-                                                newPassword));
-
-                /*
-                 * Clear OTP
-                 */
-
-                user.setResetCode(null);
-                user.setResetCodeExpiry(null);
-
-                userRepository.save(user);
-
-                return "Password updated successfully";
-        }
-
-        /*
- ============================
- SEND REGISTER OTP
- ============================
-*/
-
-public String sendRegisterOtp(String email){
-
-    // Gmail validation
-
-    if(email==null ||
-       !email.endsWith("@gmail.com")){
-
-        return "Only Gmail allowed";
+        return "Password updated";
     }
 
 
-    // Generate OTP
 
-    String code =
-            String.valueOf(
-            100000+
-            new Random().nextInt(900000)
-    );
+    /*
+     =========================
+     SEND REGISTER OTP
+     =========================
+     */
+
+    public String sendRegisterOtp(
+            String email){
+
+        if(email==null ||
+           !email.endsWith("@gmail.com")){
+
+            return "Only Gmail allowed";
+        }
 
 
-    User user =
-            userRepository.findByEmail(email);
+        String code =
+                generateCode();
 
 
-    if(user==null){
+        User user =
+                userRepository
+                .findByEmail(email);
 
-        user = new User();
 
-        user.setEmail(email);
+        if(user==null){
 
+            user=new User();
+
+            user.setEmail(email);
+        }
+
+
+        user.setRegisterOtp(code);
+
+
+        user.setRegisterOtpExpiry(
+
+                String.valueOf(
+
+                System.currentTimeMillis()
+                +600000
+
+        ));
+
+
+        userRepository.save(user);
+
+
+        mailService.sendRegisterOtp(
+                email,
+                code
+        );
+
+
+        return "OTP Sent";
     }
 
 
-    user.setRegisterOtp(code);
 
-    user.setRegisterOtpExpiry(
+    /*
+     =========================
+     VERIFY REGISTER OTP
+     =========================
+     */
 
-            String.valueOf(
-            System.currentTimeMillis()+600000
-    ));
+    public String verifyRegisterOtp(
+            String email,
+            String code){
 
+        User user =
+                userRepository
+                .findByEmail(email);
 
-    userRepository.save(user);
-
-
-    mailService.sendRegisterOtp(
-            email,
-            code
-    );
-
-
-    return "OTP Sent";
-}
-
-/*
- ============================
- VERIFY REGISTER OTP
- ============================
-*/
-
-public String verifyRegisterOtp(
-        String email,
-        String code){
-
-    User user =
-            userRepository.findByEmail(email);
-
-    if(user==null)
-        return "User not found";
+        if(user==null)
+            return "User not found";
 
 
-    if(user.getRegisterOtp()==null)
-        return "OTP not requested";
+        if(user.getRegisterOtp()==null)
+            return "OTP not requested";
 
 
-    if(!user.getRegisterOtp().equals(code))
-        return "Invalid OTP";
+        if(!user.getRegisterOtp().equals(code))
+            return "Invalid OTP";
 
 
-    long expiry =
-            Long.parseLong(
-            user.getRegisterOtpExpiry()
-    );
+        long expiry =
+                Long.parseLong(
+                user.getRegisterOtpExpiry()
+        );
 
 
-    if(System.currentTimeMillis()>expiry)
-        return "OTP expired";
+        if(System.currentTimeMillis()>expiry)
+            return "OTP expired";
 
 
-    return "Verified";
-}
+        return "Verified";
+    }
 
 }
