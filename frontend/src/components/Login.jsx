@@ -61,7 +61,8 @@ const Login = ({ onLogin }) => {
                 setError('Server waking up... Please try again in 60 seconds.');
                 axios.get(`${import.meta.env.VITE_API_URL}/auth/health`).catch(() => { });
             } else {
-                setError('Please check your credentials and try again.');
+                const data = err.response.data;
+                setError(typeof data === 'string' ? data : (data?.message || data?.error || 'Please check your credentials and try again.'));
             }
         } finally {
             setLoading(false);
@@ -95,7 +96,8 @@ const Login = ({ onLogin }) => {
                 setError('Server waking up... Please try again in 60 seconds.');
                 axios.get(`${import.meta.env.VITE_API_URL}/auth/health`).catch(() => { });
             } else {
-                setError(err.response?.data || 'Failed to send OTP.');
+                const data = err.response.data;
+                setError(typeof data === 'string' ? data : (data?.message || data?.error || 'Failed to send OTP.'));
             }
         } finally {
             setLoading(false);
@@ -128,7 +130,8 @@ const Login = ({ onLogin }) => {
                 setError('Server waking up... Please try again in 60 seconds.');
                 axios.get(`${import.meta.env.VITE_API_URL}/auth/health`).catch(() => { });
             } else {
-                setError(err.response?.data?.message || err.response?.data || 'Failed to verify OTP or register. Username or Email might be taken.');
+                const data = err.response.data;
+                setError(typeof data === 'string' ? data : (data?.message || data?.error || 'Failed to verify OTP or register. Username or Email might be taken.'));
             }
             setLoading(false);
         }
@@ -153,7 +156,8 @@ const Login = ({ onLogin }) => {
                 setError('Server waking up... Please try again in 60 seconds.');
                 axios.get(`${import.meta.env.VITE_API_URL}/auth/health`).catch(() => { });
             } else {
-                setError(err.response?.data || 'Failed to send reset code.');
+                const data = err.response.data;
+                setError(typeof data === 'string' ? data : (data?.message || data?.error || 'Failed to send reset code.'));
             }
         } finally {
             setLoading(false);
@@ -177,7 +181,8 @@ const Login = ({ onLogin }) => {
                 setError('Server waking up... Please try again in 60 seconds.');
                 axios.get(`${import.meta.env.VITE_API_URL}/auth/health`).catch(() => { });
             } else {
-                setError(err.response?.data || 'Invalid or expired code.');
+                const data = err.response.data;
+                setError(typeof data === 'string' ? data : (data?.message || data?.error || 'Invalid or expired code.'));
             }
         } finally {
             setLoading(false);
@@ -204,7 +209,8 @@ const Login = ({ onLogin }) => {
                 setError('Server waking up... Please try again in 60 seconds.');
                 axios.get(`${import.meta.env.VITE_API_URL}/auth/health`).catch(() => { });
             } else {
-                setError(err.response?.data || 'Failed to reset password.');
+                const data = err.response.data;
+                setError(typeof data === 'string' ? data : (data?.message || data?.error || 'Failed to reset password.'));
             }
         } finally {
             setLoading(false);
