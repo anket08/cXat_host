@@ -15,25 +15,19 @@ public class MailService {
      =========================
      */
 
-   @Value("${resend.api.key}")
-private String apiKey;
+    @Value("${resend.api.key}")
+    private String apiKey;
 
 
     /*
      =========================
-     SENDER EMAIL
+     SENDER
      =========================
      */
 
     private static final String FROM =
-        "onboarding@resend.dev";
+            "CXAT <onboarding@resend.dev>";
 
-
-    /*
-     =========================
-     HTTP CLIENT
-     =========================
-     */
 
     private final OkHttpClient client =
             new OkHttpClient();
@@ -47,15 +41,12 @@ private String apiKey;
      */
 
     @Async
-    public void sendResetCode(
-            String email,
-            String code){
+    public void sendResetCode(String email,String code){
 
         sendEmail(
                 email,
-                "CXAT Password Reset Code",
-                "Your OTP: <b>"+code+
-                "</b><br><br>Valid for 10 minutes."
+                "CXAT Password Reset",
+                "Your OTP: <b>"+code+"</b><br><br>Valid 10 minutes"
         );
     }
 
@@ -68,15 +59,12 @@ private String apiKey;
      */
 
     @Async
-    public void sendRegisterOtp(
-            String email,
-            String code){
+    public void sendRegisterOtp(String email,String code){
 
         sendEmail(
                 email,
-                "CXAT Verification OTP",
-                "Your OTP: <b>"+code+
-                "</b><br><br>Valid for 10 minutes."
+                "CXAT Verification",
+                "Your OTP: <b>"+code+"</b><br><br>Valid 10 minutes"
         );
     }
 
@@ -97,23 +85,81 @@ private String apiKey;
         String html =
 
                 "Welcome to CXAT!<br><br>"
+
                 +"Username: "+username+"<br>"
+
                 +"User ID: "+userId+"<br><br>"
-                +"Enjoy chatting!<br><br>"
+
+                +"Enjoy chatting<br><br>"
+
                 +"CXAT Team";
 
-        sendEmail(
-                email,
-                "Welcome to CXAT",
-                html
-        );
+
+        sendEmail(email,"Welcome to CXAT",html);
+
     }
 
 
 
     /*
      =========================
-     CORE EMAIL METHOD
+     ADD CONTACT (FREE PLAN FIX)
+     =========================
+     */
+
+    private void addContact(String email){
+
+        try{
+
+            String json = "{"
+                    +"\"email\":\""+email+"\""
+                    +"}";
+
+
+            RequestBody body =
+                    RequestBody.create(
+                            json,
+                            MediaType.get("application/json")
+                    );
+
+
+            Request request =
+                    new Request.Builder()
+
+                            .url("https://api.resend.com/contacts")
+
+                            .post(body)
+
+                            .addHeader(
+                                    "Authorization",
+                                    "Bearer "+apiKey.trim())
+
+                            .addHeader(
+                                    "Content-Type",
+                                    "application/json")
+
+                            .build();
+
+
+            client.newCall(request).execute().close();
+
+            System.out.println("CONTACT ADDED");
+
+        }
+        catch(Exception e){
+
+            System.out.println(
+                    "CONTACT ERROR: "
+                            +e.getMessage());
+        }
+
+    }
+
+
+
+    /*
+     =========================
+     CORE MAIL METHOD
      =========================
      */
 
@@ -124,8 +170,12 @@ private String apiKey;
 
         try{
 
-            // Debug API Key
-            System.out.println("API KEY = " + apiKey);
+            /*
+             Add contact first
+            */
+
+            addContact(email);
+
 
             String json = "{"
                     +"\"from\":\""+FROM+"\","
@@ -144,16 +194,19 @@ private String apiKey;
 
             Request request =
                     new Request.Builder()
+
                             .url("https://api.resend.com/emails")
+
                             .post(body)
+
                             .addHeader(
                                     "Authorization",
-                                    "Bearer "+apiKey
-                            )
+                                    "Bearer "+apiKey.trim())
+
                             .addHeader(
                                     "Content-Type",
-                                    "application/json"
-                            )
+                                    "application/json")
+
                             .build();
 
 
@@ -164,17 +217,7 @@ private String apiKey;
 
             System.out.println(
                     "MAIL STATUS = "
-                    + response.code()
-            );
-
-
-            String respBody =
-                    response.body()
-                            .string();
-
-            System.out.println(
-                    "MAIL RESPONSE = "
-                    + respBody
+                            +response.code()
             );
 
 
@@ -186,9 +229,7 @@ private String apiKey;
 
             System.out.println(
                     "MAIL ERROR = "
-                    + e.getMessage()
-            );
-
+                            +e.getMessage());
         }
 
     }
