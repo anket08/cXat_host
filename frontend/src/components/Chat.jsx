@@ -42,7 +42,7 @@ const Chat = ({ user, activeRoom: propActiveRoom, onLeaveRoom }) => {
             }
         };
 
-        const socket = new SockJS('http://localhost:8080/ws');
+        const socket = new SockJS(`${import.meta.env.VITE_API_URL}/ws`);
         const client = Stomp.over(socket);
         client.debug = null; // Disable debug logs for cleaner console
         stompClientRef.current = client;
@@ -76,7 +76,7 @@ const Chat = ({ user, activeRoom: propActiveRoom, onLeaveRoom }) => {
 
     const fetchHistory = async (id) => {
         try {
-            const res = await axios.get(`http://localhost:8080/chat/messages/${id}`);
+            const res = await axios.get(`${import.meta.env.VITE_API_URL}/chat/messages/${id}`);
             if (Array.isArray(res.data)) {
                 setMessages(res.data);
 

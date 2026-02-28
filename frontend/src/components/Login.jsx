@@ -31,14 +31,14 @@ const Login = ({ onLogin }) => {
         setLoading(true);
         const startTime = Date.now();
         try {
-            const response = await axios.post('http://localhost:8080/auth/login', {
+            const response = await axios.post(`${import.meta.env.VITE_API_URL}/auth/login`, {
                 username: formData.username,
                 password: formData.password
             });
             await minLoadTime(startTime);
             if (response.status === 200) {
                 try {
-                    const userResponse = await axios.get(`http://localhost:8080/auth/user/${formData.username}`);
+                    const userResponse = await axios.get(`${import.meta.env.VITE_API_URL}/auth/user/${formData.username}`);
                     onLogin(userResponse.data);
                 } catch (fetchError) {
                     onLogin({ username: formData.username, id: Date.now() });
@@ -59,7 +59,7 @@ const Login = ({ onLogin }) => {
         setLoading(true);
         const startTime = Date.now();
         try {
-            const res = await axios.post('http://localhost:8080/auth/register', {
+            const res = await axios.post(`${import.meta.env.VITE_API_URL}/auth/register`, {
                 username: formData.username,
                 password: formData.password,
                 email: formData.email,

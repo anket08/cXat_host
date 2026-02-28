@@ -28,7 +28,7 @@ const Lobby = ({ user, onJoinRoom, onLogout }) => {
     const handleCreateRoom = async () => {
         setLoading(true);
         try {
-            const res = await axios.post('http://localhost:8080/chat/room');
+            const res = await axios.post(`${import.meta.env.VITE_API_URL}/chat/room`);
             if (res.data && res.data.id) {
                 addRecentRoom(res.data.id);
                 onJoinRoom(res.data.id);
@@ -48,7 +48,7 @@ const Lobby = ({ user, onJoinRoom, onLogout }) => {
             return;
         }
         try {
-            const res = await axios.get(`http://localhost:8080/chat/room/${roomId.trim()}/exists`);
+            const res = await axios.get(`${import.meta.env.VITE_API_URL}/chat/room/${roomId.trim()}/exists`);
             if (res.data === true) {
                 addRecentRoom(roomId.trim());
                 onJoinRoom(roomId.trim());
