@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { motion, useScroll, useTransform, useInView, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, Terminal, PawPrint, Shield, Zap, GitCommit, GitBranch, Lock, Database, CheckCheck, Clock, Layers, Mail, Twitter, Instagram, Facebook, Linkedin, FileText, Code, Phone } from 'lucide-react';
+import { ChevronRight, Terminal, PawPrint, Shield, Zap, GitCommit, GitBranch, Lock, Database, CheckCheck, Clock, Layers, Mail, Twitter, Instagram, Facebook, Linkedin, FileText, Code, Phone, Video } from 'lucide-react';
 
 const LandingPage = () => {
     const navigate = useNavigate();
@@ -38,7 +38,7 @@ const LandingPage = () => {
                             <div style={{ padding: '20px 24px', borderBottom: '1px solid #30363d', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                 <h3 style={{ margin: 0, color: '#fff', fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                     <GitCommit size={20} color="#79c0ff" />
-                                    Changelog (v11)
+                                    Changelog (v14)
                                 </h3>
                                 <button onClick={() => setIsChangelogOpen(false)} style={{ background: 'transparent', border: 'none', color: '#8b949e', cursor: 'pointer', padding: '4px', fontSize: '1.2rem' }}>✕</button>
                             </div>
@@ -46,8 +46,23 @@ const LandingPage = () => {
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                                     <div style={{ borderLeft: '2px solid #30363d', paddingLeft: '16px', position: 'relative' }}>
                                         <div style={{ position: 'absolute', left: '-5px', top: '4px', width: '8px', height: '8px', borderRadius: '50%', background: '#26ef2dff', boxShadow: '0 0 10px #3fb950' }}></div>
-                                        <div style={{ fontSize: '0.8rem', color: '#8b949e', marginBottom: '4px' }}>Latest - 5ce52d3</div>
-                                        <div style={{ color: '#c9d1d9', fontWeight: '500' }}>Redis Integration, Read Recipts,Bcrypt Password Encryption</div>
+                                        <div style={{ fontSize: '0.8rem', color: '#8b949e', marginBottom: '4px' }}>Latest - v14</div>
+                                        <div style={{ color: '#c9d1d9', fontWeight: '500' }}>Video Call feature added (WebRTC + STOMP signaling)</div>
+                                    </div>
+                                    <div style={{ borderLeft: '2px solid #30363d', paddingLeft: '16px', position: 'relative' }}>
+                                        <div style={{ position: 'absolute', left: '-5px', top: '4px', width: '8px', height: '8px', borderRadius: '50%', background: '#30363d' }}></div>
+                                        <div style={{ fontSize: '0.8rem', color: '#8b949e', marginBottom: '4px' }}>v13</div>
+                                        <div style={{ color: '#c9d1d9' }}>OTP Verification for registration & password reset</div>
+                                    </div>
+                                    <div style={{ borderLeft: '2px solid #30363d', paddingLeft: '16px', position: 'relative' }}>
+                                        <div style={{ position: 'absolute', left: '-5px', top: '4px', width: '8px', height: '8px', borderRadius: '50%', background: '#30363d' }}></div>
+                                        <div style={{ fontSize: '0.8rem', color: '#8b949e', marginBottom: '4px' }}>v12</div>
+                                        <div style={{ color: '#c9d1d9' }}>Recent Chats API — server-side persistence replaces localStorage</div>
+                                    </div>
+                                    <div style={{ borderLeft: '2px solid #30363d', paddingLeft: '16px', position: 'relative' }}>
+                                        <div style={{ position: 'absolute', left: '-5px', top: '4px', width: '8px', height: '8px', borderRadius: '50%', background: '#30363d' }}></div>
+                                        <div style={{ fontSize: '0.8rem', color: '#8b949e', marginBottom: '4px' }}>5ce52d3</div>
+                                        <div style={{ color: '#c9d1d9' }}>Redis Integration, Read Receipts, Bcrypt Password Encryption</div>
                                     </div>
                                     <div style={{ borderLeft: '2px solid #30363d', paddingLeft: '16px', position: 'relative' }}>
                                         <div style={{ position: 'absolute', left: '-5px', top: '4px', width: '8px', height: '8px', borderRadius: '50%', background: '#30363d' }}></div>
@@ -122,16 +137,27 @@ const LandingPage = () => {
                     whileHover={{ background: 'rgba(255,255,255,0.05)' }}
                     style={{ border: '1px solid #30363d', borderRadius: '100px', padding: '6px 16px', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px', color: '#8b949e', fontSize: '0.85rem', fontWeight: 'bold', cursor: 'pointer', background: 'rgba(255,255,255,0.02)', transition: 'background 0.2s' }}>
                     <div style={{ width: '8px', height: '8px', background: '#3fb950', borderRadius: '50%', boxShadow: '0 0 10px #3fb950' }}></div>
-                    VERSION 11 <ChevronRight size={14} />
+                    VERSION 14 <ChevronRight size={14} />
                 </motion.div>
 
                 <motion.h1 initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.1 }} style={{ fontSize: 'clamp(3.5rem, 8vw, 5.5rem)', fontWeight: '800', lineHeight: 1.1, color: '#fff', textAlign: 'center', maxWidth: '900px', letterSpacing: '-0.04em' }}>
-                    Let's connect from <span style={{ color: '#79c0ff' }}>cXat.</span>
+                    Let's connect from <span style={{ background: 'linear-gradient(90deg, #79c0ff, #d2a8ff, #79c0ff, #d2a8ff)', backgroundSize: '200% 100%', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', animation: 'gradientFlow 3s ease infinite' }}>cXat.</span>
                 </motion.h1>
 
                 <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8, delay: 0.3 }} style={{ color: '#8b949e', fontSize: '1.5rem', textAlign: 'center', maxWidth: '700px', marginTop: '24px', lineHeight: 1.5, fontWeight: '400' }}>
                     Fast, agile messaging inspired by the speed of the cat family.
                 </motion.p>
+
+                {/* Feature Pills */}
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8, delay: 0.45 }} style={{ display: 'flex', gap: '16px', marginTop: '16px', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#8b949e', fontSize: '0.85rem', fontWeight: '500', letterSpacing: '0.3px' }}>
+                        <Terminal size={13} color="#79c0ff" /> Encrypted Chat
+                    </div>
+                    <div style={{ width: '3px', height: '3px', borderRadius: '50%', background: '#30363d' }}></div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#8b949e', fontSize: '0.85rem', fontWeight: '500', letterSpacing: '0.3px' }}>
+                        <Video size={13} color="#3fb950" /> Live Calls
+                    </div>
+                </motion.div>
 
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.5 }} style={{ marginTop: '40px', width: '100%', maxWidth: '500px' }}>
                     <div className="landing-hero-input-group">
@@ -155,7 +181,10 @@ const LandingPage = () => {
                         <div style={{ color: '#3fb950' }}>[OK] Handshake established (AES-256)</div>
                         <div style={{ color: '#d2a8ff' }}>[SYS] Allocating private channel '349X'</div>
                         <div>Waiting for peer connection...</div>
-                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 2.5, duration: 0.5 }} style={{ color: '#ff7b72', marginTop: '12px' }}>
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 2, duration: 0.5 }} style={{ color: '#3fb950', marginTop: '4px' }}>
+                            [WebRTC] Video stream active — P2P tunnel established
+                        </motion.div>
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 2.8, duration: 0.5 }} style={{ color: '#ff7b72', marginTop: '12px' }}>
                             <span style={{ color: '#79c0ff' }}>Operator:</span> "The payload has been delivered."
                         </motion.div>
                     </div>
@@ -250,6 +279,27 @@ const LandingPage = () => {
                                 <span style={{ color: '#ff7b72' }}>if</span> (unread) &#123;<br />
                                 &nbsp;&nbsp;&nbsp;&nbsp;client.<span style={{ color: '#d2a8ff' }}>send</span>(<span style={{ color: '#a5d6ff' }}>"/app/read"</span>, &#123;&#125;, <span style={{ color: '#79c0ff' }}>JSON</span>.<span style={{ color: '#d2a8ff' }}>stringify</span>(&#123; roomId &#125;));<br />
                                 &#125;
+                            </>
+                        } />}
+                    />
+
+                    {/* Section 5: Video Call */}
+                    <Section
+                        icon={<Video size={24} color="#3fb950" />}
+                        title="Face-to-face, fully encrypted."
+                        subtitle="WebRTC video conferencing"
+                        text="Launch crystal-clear video calls directly from your workspace. Peer-to-peer WebRTC connections with STUN/TURN relay ensure your conversations stay private while STOMP signaling handles seamless call setup."
+                        visual={<CodeBox title="peerConnection.init()" color="#3fb950" content={
+                            <>
+                                <span style={{ color: '#ff7b72' }}>const</span> pc <span style={{ color: '#79c0ff' }}>=</span> <span style={{ color: '#ff7b72' }}>new</span> <span style={{ color: '#d2a8ff' }}>RTCPeerConnection</span>(config);<br />
+                                <br />
+                                <span style={{ color: '#8b949e' }}>// Capture local media stream</span><br />
+                                <span style={{ color: '#ff7b72' }}>const</span> stream <span style={{ color: '#79c0ff' }}>=</span> <span style={{ color: '#ff7b72' }}>await</span> navigator.mediaDevices<br />
+                                &nbsp;&nbsp;&nbsp;&nbsp;.<span style={{ color: '#d2a8ff' }}>getUserMedia</span>({'{'} video: <span style={{ color: '#79c0ff' }}>true</span>, audio: <span style={{ color: '#79c0ff' }}>true</span> {'}'});<br />
+                                <br />
+                                stream.<span style={{ color: '#d2a8ff' }}>getTracks</span>().<span style={{ color: '#d2a8ff' }}>forEach</span>(track <span style={{ color: '#ff7b72' }}>={'>'}  </span><br />
+                                &nbsp;&nbsp;&nbsp;&nbsp;pc.<span style={{ color: '#d2a8ff' }}>addTrack</span>(track, stream)<br />
+                                );
                             </>
                         } />}
                     />

@@ -1,36 +1,96 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { motion } from 'framer-motion';
-import { Plus, Link, Zap, User, Crosshair, Settings, ShieldCheck, Activity, ChevronRight } from 'lucide-react';
+import { Plus, Link, Zap, Crosshair, ShieldCheck, Activity, ChevronRight, Video, MessageSquare, Phone as PhoneIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+
+const API = import.meta.env.VITE_API_URL;
 
 const Lobby = ({ user, onJoinRoom, onLogout }) => {
     const navigate = useNavigate();
     const [roomId, setRoomId] = useState('');
     const [loading, setLoading] = useState(false);
+    const [recentRooms, setRecentRooms] = useState([]);
+    const [recentLoading, setRecentLoading] = useState(true);
 
-    const STORAGE_KEY = `cxat_recent_rooms_${user?.username || 'guest'}`;
+    // Fetch recent chats from backend
+    useEffect(() => {
+        if (!user?.id) return;
+        const fetchRecent = async () => {
+            setRecentLoading(true);
+            try {
+                // Fetch recent chats
+                const chatRes = await axios.get(`${API}/chat/recent/${user.id}`);
+                let chatItems = [];
+                if (Array.isArray(chatRes.data)) {
+                    const roomMap = {};
+                    chatRes.data.forEach(msg => {
+                        const existing = roomMap[msg.roomId];
+                        if (!existing || (msg.createdAt && (!existing.createdAt || msg.createdAt > existing.createdAt))) {
+                            roomMap[msg.roomId] = msg;
+                        }
+                    });
+                    chatItems = Object.values(roomMap).map(msg => ({
+                        id: msg.roomId,
+                        type: 'chat',
+                        label: `#${msg.roomId}`,
+                        preview: msg.content,
+                        time: msg.createdAt,
+                        route: `/chat/${msg.roomId}`,
+                    }));
+                }
 
-    const [recentRooms, setRecentRooms] = useState(() => {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        return saved ? JSON.parse(saved) : [];
-    });
+                // Fetch recent meetings
+                let meetingItems = [];
+                try {
+                    const meetRes = await axios.get(`${API}/meeting/participants/${user.id}`);
+                    if (Array.isArray(meetRes.data)) {
+                        meetingItems = meetRes.data.filter(p => !p.leftAt).map(p => ({
+                            id: `meeting-${p.meetingCode}`,
+                            type: 'call',
+                            label: p.meetingCode,
+                            preview: 'Video call',
+                            time: p.joinedAt,
+                            route: `/meeting/${p.meetingCode}`,
+                        }));
+                    }
+                } catch (e) { /* meetings endpoint may not support this query yet */ }
 
-    const addRecentRoom = (id) => {
-        if (!id) return;
-        setRecentRooms(prev => {
-            const updated = [id, ...prev.filter(r => r !== id)].slice(0, 10);
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-            return updated;
-        });
+                // Merge and sort by latest
+                const all = [...chatItems, ...meetingItems].sort((a, b) =>
+                    (b.time || '').localeCompare(a.time || '')
+                ).slice(0, 10);
+                setRecentRooms(all);
+            } catch (err) {
+                console.error('Failed to fetch recent:', err);
+            } finally {
+                setRecentLoading(false);
+            }
+        };
+        fetchRecent();
+    }, [user?.id]);
+
+    // Helper: format relative time
+    const formatRelativeTime = (isoString) => {
+        if (!isoString) return '';
+        const date = new Date(isoString);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMin = Math.floor(diffMs / 60000);
+        if (diffMin < 1) return 'now';
+        if (diffMin < 60) return `${diffMin}m`;
+        const diffHr = Math.floor(diffMin / 60);
+        if (diffHr < 24) return `${diffHr}h`;
+        const diffDay = Math.floor(diffHr / 24);
+        if (diffDay < 7) return `${diffDay}d`;
+        return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
     };
 
     const handleCreateRoom = async () => {
         setLoading(true);
         try {
-            const res = await axios.post(`${import.meta.env.VITE_API_URL}/chat/room`);
+            const res = await axios.post(`${API}/chat/room`);
             if (res.data && res.data.id) {
-                addRecentRoom(res.data.id);
                 onJoinRoom(res.data.id);
                 navigate(`/chat/${res.data.id}`);
             }
@@ -48,9 +108,8 @@ const Lobby = ({ user, onJoinRoom, onLogout }) => {
             return;
         }
         try {
-            const res = await axios.get(`${import.meta.env.VITE_API_URL}/chat/room/${roomId.trim()}/exists`);
+            const res = await axios.get(`${API}/chat/room/${roomId.trim()}/exists`);
             if (res.data === true) {
-                addRecentRoom(roomId.trim());
                 onJoinRoom(roomId.trim());
                 navigate(`/chat/${roomId.trim()}`);
             } else {
@@ -116,21 +175,36 @@ const Lobby = ({ user, onJoinRoom, onLogout }) => {
                         boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
                         willChange: 'transform' // Hardware acceleration to decoupled from background paints
                     }}>
-                        <h3 style={{ fontSize: '1.2rem', fontWeight: '800', color: '#fff', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '8px', letterSpacing: '-0.5px' }}><Activity size={20} color="var(--accent-secondary)" /> Recent Channels</h3>
+                        <h3 style={{ fontSize: '1.2rem', fontWeight: '800', color: '#fff', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '8px', letterSpacing: '-0.5px' }}><Activity size={20} color="var(--accent-secondary)" /> Recent Activity</h3>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', overflowY: 'auto', paddingRight: '8px', scrollbarWidth: 'none', transform: 'translateZ(0)' }}>
-                            {recentRooms.length === 0 ? (
+                            {recentLoading ? (
+                                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textAlign: 'center', marginTop: '2rem' }}>Loading...</p>
+                            ) : recentRooms.length === 0 ? (
                                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textAlign: 'center', marginTop: '2rem' }}>No recent activity.</p>
                             ) : (
-                                recentRooms.map(id => (
+                                recentRooms.map(item => (
                                     <button
-                                        key={id}
-                                        onClick={() => { addRecentRoom(id); onJoinRoom(id); navigate(`/chat/${id}`); }}
+                                        key={item.id}
+                                        onClick={() => { if (item.type === 'chat') onJoinRoom(item.id); navigate(item.route); }}
                                         style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', padding: '14px 18px', borderRadius: '16px', color: 'var(--text-main)', textAlign: 'left', fontWeight: '600', cursor: 'pointer', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                                        onMouseOver={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.borderColor = 'rgba(210, 168, 255, 0.3)'; e.currentTarget.style.transform = 'translateX(4px)'; }}
+                                        onMouseOver={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.borderColor = item.type === 'call' ? 'rgba(63,185,80,0.3)' : 'rgba(210, 168, 255, 0.3)'; e.currentTarget.style.transform = 'translateX(4px)'; }}
                                         onMouseOut={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.02)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.transform = 'translateX(0)'; }}
                                     >
-                                        <span style={{ fontSize: '1rem', letterSpacing: '0.5px' }}><span style={{ color: 'var(--accent-secondary)', opacity: 0.8 }}>#</span> {id}</span>
-                                        <ChevronRight size={16} color="var(--text-muted)" style={{ transition: 'transform 0.3s ease' }} />
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden', flex: 1 }}>
+                                            <div style={{ width: '28px', height: '28px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, background: item.type === 'call' ? 'rgba(63,185,80,0.1)' : 'rgba(210,168,255,0.1)', border: item.type === 'call' ? '1px solid rgba(63,185,80,0.2)' : '1px solid rgba(210,168,255,0.2)' }}>
+                                                {item.type === 'call' ? <PhoneIcon size={14} color="var(--accent-tertiary)" /> : <MessageSquare size={14} color="var(--accent-secondary)" />}
+                                            </div>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', overflow: 'hidden' }}>
+                                                <span style={{ fontSize: '0.95rem', letterSpacing: '0.5px' }}>{item.label}</span>
+                                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '400', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                    {item.preview?.length > 25 ? item.preview.slice(0, 25) + '…' : item.preview}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', flexShrink: 0, marginLeft: '12px' }}>
+                                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: '500' }}>{formatRelativeTime(item.time)}</span>
+                                            <ChevronRight size={16} color="var(--text-muted)" style={{ transition: 'transform 0.3s ease' }} />
+                                        </div>
                                     </button>
                                 ))
                             )}
@@ -197,26 +271,27 @@ const Lobby = ({ user, onJoinRoom, onLogout }) => {
                                 </button>
                             </motion.div>
 
-                            {/* Profile Card */}
-                            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }} onClick={() => navigate('/profile')}
-                                style={{ padding: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', cursor: 'pointer', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)', background: 'rgba(22, 27, 34, 0.5)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', borderRadius: '20px', border: '1px solid rgba(48, 54, 61, 0.8)', boxShadow: '0 8px 24px rgba(0,0,0,0.3)', position: 'relative', overflow: 'hidden', height: '100%' }}
-                                onMouseOver={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; e.currentTarget.style.background = 'rgba(48, 54, 61, 0.6)'; e.currentTarget.style.boxShadow = '0 16px 32px rgba(0,0,0,0.4)'; }}
-                                onMouseOut={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = 'rgba(48, 54, 61, 0.8)'; e.currentTarget.style.background = 'rgba(22, 27, 34, 0.5)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.3)'; }}
+                            {/* Video Call Card */}
+                            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.15 }}
+                                style={{ padding: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)', background: 'rgba(22, 27, 34, 0.5)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', borderRadius: '20px', border: '1px solid rgba(48, 54, 61, 0.8)', boxShadow: '0 8px 24px rgba(0,0,0,0.3)', position: 'relative', overflow: 'hidden', height: '100%' }}
+                                onMouseOver={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.background = 'rgba(48, 54, 61, 0.6)'; e.currentTarget.style.borderColor = 'rgba(63, 185, 80, 0.4)'; e.currentTarget.style.boxShadow = '0 16px 32px rgba(0,0,0,0.4), 0 0 30px rgba(63, 185, 80, 0.1)'; }}
+                                onMouseOut={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.background = 'rgba(22, 27, 34, 0.5)'; e.currentTarget.style.borderColor = 'rgba(48, 54, 61, 0.8)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.3)'; }}
                             >
-                                <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: 'rgba(255,255,255,0.03)', color: '#c9d1d9', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem', border: '1px solid rgba(255,255,255,0.05)' }}>
-                                    <User size={32} />
+                                <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: 'linear-gradient(135deg, rgba(63,185,80,0.15), rgba(63,185,80,0.05))', color: 'var(--accent-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem', border: '1px solid rgba(63,185,80,0.2)', boxShadow: 'inset 0 0 15px rgba(63,185,80,0.05)' }}>
+                                    <Video size={32} />
                                 </div>
-                                <h3 style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '1rem', color: '#e6edf3' }}>Operator Profile</h3>
+                                <h3 style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '1rem', color: '#e6edf3' }}>Video Call</h3>
                                 <p style={{ color: '#8b949e', fontSize: '0.95rem', lineHeight: '1.6', marginBottom: '2.5rem', flex: 1 }}>
-                                    Access your identity logs, communication stats, and personalize your configuration settings.
+                                    Start a secure face-to-face meeting with end-to-end encrypted video and crystal-clear audio.
                                 </p>
-                                <div style={{ marginTop: 'auto', padding: '12px 24px', borderRadius: '12px', background: 'rgba(255,255,255,0.03)', display: 'flex', alignItems: 'center', gap: '8px', color: '#c9d1d9', fontSize: '0.9rem', fontWeight: '600', border: '1px solid rgba(255,255,255,0.05)', transition: 'all 0.2s ease', width: '100%', justifyContent: 'center' }}
-                                    onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.color = '#fff'; }}
-                                    onMouseOut={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; e.currentTarget.style.color = '#c9d1d9'; }}
+                                <button onClick={() => navigate('/meeting')} style={{ width: '100%', padding: '14px', background: 'rgba(63, 185, 80, 0.1)', color: 'var(--accent-tertiary)', border: '1px solid rgba(63, 185, 80, 0.3)', borderRadius: '14px', fontWeight: '700', fontSize: '0.95rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', transition: 'all 0.2s ease', marginTop: 'auto' }}
+                                    onMouseOver={(e) => { e.currentTarget.style.background = 'var(--accent-tertiary)'; e.currentTarget.style.color = '#000'; e.currentTarget.style.boxShadow = '0 4px 15px rgba(63, 185, 80, 0.3)'; }}
+                                    onMouseOut={(e) => { e.currentTarget.style.background = 'rgba(63, 185, 80, 0.1)'; e.currentTarget.style.color = 'var(--accent-tertiary)'; e.currentTarget.style.boxShadow = 'none'; }}
                                 >
-                                    CONFIGURE <Settings size={16} />
-                                </div>
+                                    LAUNCH <Video size={18} />
+                                </button>
                             </motion.div>
+
 
                         </div>
                     </main>

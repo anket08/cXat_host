@@ -138,7 +138,16 @@ public class ChatService {
 
         return chatRoomRepository.existsById(roomId);
 
+
     }
+
+//     recent chats for a user
+
+    public List<Message> getRecentChats(String userId){
+
+    return messageRepository.findRecentMessages(userId);
+
+}
 
 
 

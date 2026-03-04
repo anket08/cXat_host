@@ -25,6 +25,7 @@ const Login = ({ onLogin }) => {
     // OTP Popup State
     const [showOtpPopup, setShowOtpPopup] = useState(false);
     const [generatedOtp, setGeneratedOtp] = useState('');
+    const [otpCopied, setOtpCopied] = useState(false);
 
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -40,9 +41,11 @@ const Login = ({ onLogin }) => {
 
     const minLoadTime = (startTime) => {
         const elapsed = Date.now() - startTime;
-        const minTime = 1500; // reduced artificial delay to feel snappier
+        const minTime = 1500;
         return new Promise(resolve => setTimeout(resolve, Math.max(0, minTime - elapsed)));
     };
+
+    const isValidOtp = (otp) => /^\d{6}$/.test(otp);
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -84,15 +87,26 @@ const Login = ({ onLogin }) => {
         setLoading(true);
         const startTime = Date.now();
         try {
+            // Pre-check: if email already has a registered account
+            try {
+                const checkRes = await axios.post(`${import.meta.env.VITE_API_URL}/auth/forgot?email=${formData.email}`);
+                if (checkRes.data?.otp && isValidOtp(checkRes.data.otp)) {
+                    await minLoadTime(startTime);
+                    setError('This email is already registered. Please sign in instead.');
+                    setLoading(false);
+                    return;
+                }
+            } catch (e) { /* email not found = safe to register */ }
+
             const response = await axios.post(`${import.meta.env.VITE_API_URL}/auth/send-otp?email=${formData.email}`);
             await minLoadTime(startTime);
-            if (response.status === 200 && response.data?.otp) {
+            if (response.data?.otp && isValidOtp(response.data.otp)) {
                 setGeneratedOtp(response.data.otp);
                 setShowOtpPopup(true);
                 setSuccessMsg("Verification OTP generated successfully.");
                 setRegisterStep(1);
             } else {
-                setError('Failed to generate OTP.');
+                setError(response.data?.otp || 'Failed to generate OTP.');
             }
         } catch (err) {
             await minLoadTime(startTime);
@@ -150,11 +164,13 @@ const Login = ({ onLogin }) => {
         try {
             const response = await axios.post(`${import.meta.env.VITE_API_URL}/auth/forgot?email=${resetData.email}`);
             await minLoadTime(startTime);
-            if (response.status === 200 && response.data?.otp) {
+            if (response.data?.otp && isValidOtp(response.data.otp)) {
                 setGeneratedOtp(response.data.otp);
                 setShowOtpPopup(true);
                 setSuccessMsg("Reset code generated successfully.");
                 setResetStep(2);
+            } else {
+                setError(response.data?.otp || 'Email not found. Please check and try again.');
             }
         } catch (err) {
             await minLoadTime(startTime);
@@ -177,9 +193,11 @@ const Login = ({ onLogin }) => {
         try {
             const response = await axios.post(`${import.meta.env.VITE_API_URL}/auth/verify?email=${resetData.email}&code=${resetData.code}`);
             await minLoadTime(startTime);
-            if (response.status === 200) {
+            if (response.data === 'Verified') {
                 setSuccessMsg("Code verified perfectly.");
                 setResetStep(3);
+            } else {
+                setError(response.data || 'Invalid or expired code.');
             }
         } catch (err) {
             await minLoadTime(startTime);
@@ -202,12 +220,14 @@ const Login = ({ onLogin }) => {
         try {
             const response = await axios.post(`${import.meta.env.VITE_API_URL}/auth/reset?email=${resetData.email}&code=${resetData.code}&password=${resetData.newPassword}`);
             await minLoadTime(startTime);
-            if (response.status === 200) {
+            if (response.data === 'Password updated') {
                 setSuccessMsg("Password reset successfully! Please sign in.");
                 setResetStep(0);
                 setIsRegistering(false);
                 setResetData({ email: '', code: '', newPassword: '' });
                 setFormData({ ...formData, password: '' });
+            } else {
+                setError(response.data || 'Failed to reset password.');
             }
         } catch (err) {
             await minLoadTime(startTime);
@@ -501,14 +521,33 @@ const Login = ({ onLogin }) => {
                                 </span>
                             </div>
 
-                            <motion.button
-                                onClick={() => setShowOtpPopup(false)}
-                                whileHover={{ scale: 1.02 }}
-                                whileTap={{ scale: 0.98 }}
-                                style={{ width: '100%', padding: '14px', background: 'var(--text-main)', color: 'var(--bg-base)', border: 'none', borderRadius: '12px', fontWeight: '700', fontSize: '0.95rem', cursor: 'pointer', transition: 'all 0.3s ease', boxShadow: '0 4px 14px 0 rgba(255,255,255,0.1)' }}
-                            >
-                                Copy & Close
-                            </motion.button>
+                            <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
+                                <motion.button
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(generatedOtp).then(() => {
+                                            setOtpCopied(true);
+                                            setTimeout(() => setOtpCopied(false), 2000);
+                                        }).catch(() => { });
+                                    }}
+                                    whileHover={{ scale: 1.02 }}
+                                    whileTap={{ scale: 0.98 }}
+                                    style={{ flex: 1, padding: '14px', background: otpCopied ? 'rgba(75, 255, 120, 0.15)' : 'rgba(255,255,255,0.05)', color: otpCopied ? 'var(--success)' : 'var(--text-main)', border: otpCopied ? '1px solid rgba(75, 255, 120, 0.3)' : '1px solid var(--glass-border)', borderRadius: '12px', fontWeight: '700', fontSize: '0.9rem', cursor: 'pointer', transition: 'all 0.3s ease' }}
+                                >
+                                    {otpCopied ? '✓ Copied!' : 'Copy OTP'}
+                                </motion.button>
+                                <motion.button
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(generatedOtp).catch(() => { });
+                                        setShowOtpPopup(false);
+                                        setOtpCopied(false);
+                                    }}
+                                    whileHover={{ scale: 1.02 }}
+                                    whileTap={{ scale: 0.98 }}
+                                    style={{ flex: 1, padding: '14px', background: 'var(--text-main)', color: 'var(--bg-base)', border: 'none', borderRadius: '12px', fontWeight: '700', fontSize: '0.9rem', cursor: 'pointer', transition: 'all 0.3s ease', boxShadow: '0 4px 14px 0 rgba(255,255,255,0.1)' }}
+                                >
+                                    Copy & Close
+                                </motion.button>
+                            </div>
                         </motion.div>
                     </motion.div>
                 )}

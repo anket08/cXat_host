@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { User, Shield, Save, Lock, FileText, CheckCircle, AtSign, Settings, Mail, ArrowRight } from 'lucide-react';
+import { User, Shield, Save, Lock, FileText, CheckCircle, AtSign, Settings, Mail, ArrowRight, Copy } from 'lucide-react';
 import axios from 'axios';
 
 const ProfileDashboard = () => {
@@ -19,6 +19,11 @@ const ProfileDashboard = () => {
     const [resetLoading, setResetLoading] = useState(false);
     const [resetError, setResetError] = useState('');
     const [resetSuccess, setResetSuccess] = useState('');
+
+    // OTP Popup State
+    const [showOtpPopup, setShowOtpPopup] = useState(false);
+    const [generatedOtp, setGeneratedOtp] = useState('');
+    const [otpCopied, setOtpCopied] = useState(false);
 
     useEffect(() => {
         const storedUser = localStorage.getItem('cxat_user');
@@ -62,6 +67,8 @@ const ProfileDashboard = () => {
         return new Promise(resolve => setTimeout(resolve, Math.max(0, 1500 - elapsed)));
     };
 
+    const isValidOtp = (otp) => /^\d{6}$/.test(otp);
+
     const handleForgotPassword = async (e) => {
         e.preventDefault();
         setResetLoading(true);
@@ -69,9 +76,13 @@ const ProfileDashboard = () => {
         try {
             const response = await axios.post(`${import.meta.env.VITE_API_URL}/auth/forgot?email=${resetData.email}`);
             await minLoadTime(startTime);
-            if (response.status === 200) {
-                setResetSuccess("Code sent to email. Please check your inbox.");
+            if (response.data?.otp && isValidOtp(response.data.otp)) {
+                setGeneratedOtp(response.data.otp);
+                setShowOtpPopup(true);
+                setResetSuccess("Reset code generated successfully.");
                 setResetStep(2);
+            } else {
+                setResetError(response.data?.otp || 'Email not found. Please check and try again.');
             }
         } catch (err) {
             await minLoadTime(startTime);
@@ -93,9 +104,11 @@ const ProfileDashboard = () => {
         try {
             const response = await axios.post(`${import.meta.env.VITE_API_URL}/auth/verify?email=${resetData.email}&code=${resetData.code}`);
             await minLoadTime(startTime);
-            if (response.status === 200) {
+            if (response.data === 'Verified') {
                 setResetSuccess("Code verified OK. Now set new password.");
                 setResetStep(3);
+            } else {
+                setResetError(response.data || 'Invalid or expired code.');
             }
         } catch (err) {
             await minLoadTime(startTime);
@@ -117,12 +130,14 @@ const ProfileDashboard = () => {
         try {
             const response = await axios.post(`${import.meta.env.VITE_API_URL}/auth/reset?email=${resetData.email}&code=${resetData.code}&password=${resetData.newPassword}`);
             await minLoadTime(startTime);
-            if (response.status === 200) {
+            if (response.data === 'Password updated') {
                 setResetSuccess("Password updated successfully!");
                 setTimeout(() => {
                     setResetStep(0);
                     setResetData({ email: user.email || '', code: '', newPassword: '' });
                 }, 2500);
+            } else {
+                setResetError(response.data || 'Password update failed.');
             }
         } catch (err) {
             await minLoadTime(startTime);
@@ -310,6 +325,65 @@ const ProfileDashboard = () => {
                     </motion.div>
                 </motion.div>
             </div>
+
+            {/* OTP Popup Modal */}
+            <AnimatePresence>
+                {showOtpPopup && (
+                    <motion.div
+                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}
+                        onClick={() => setShowOtpPopup(false)}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                            style={{ background: 'var(--bg-base)', border: '1px solid var(--glass-border)', padding: '2.5rem 2rem', borderRadius: '20px', maxWidth: '380px', width: '100%', textAlign: 'center', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}
+                            onClick={e => e.stopPropagation()}
+                        >
+                            <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--glass-border)', borderRadius: '50%', width: '64px', height: '64px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem', boxShadow: '0 0 20px rgba(210, 168, 255, 0.1)' }}>
+                                <Mail size={28} color="var(--accent-secondary)" />
+                            </div>
+                            <h3 style={{ fontSize: '1.3rem', fontWeight: '800', marginBottom: '0.5rem', color: 'var(--text-main)', letterSpacing: '-0.5px' }}>Reset Code</h3>
+                            <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '1.5rem', lineHeight: '1.6' }}>
+                                Your secure password reset code from <strong style={{ color: 'var(--text-main)' }}>CXAT System</strong>.
+                            </p>
+
+                            <div style={{ background: 'rgba(210, 168, 255, 0.05)', border: '1px dashed rgba(210, 168, 255, 0.3)', padding: '1.5rem', borderRadius: '12px', marginBottom: '1.5rem', width: '100%' }}>
+                                <span style={{ fontSize: '2.5rem', letterSpacing: '8px', fontWeight: '900', fontFamily: 'monospace', color: 'var(--text-main)', display: 'block', marginLeft: '8px' }}>
+                                    {generatedOtp}
+                                </span>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
+                                <motion.button
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(generatedOtp).then(() => {
+                                            setOtpCopied(true);
+                                            setTimeout(() => setOtpCopied(false), 2000);
+                                        }).catch(() => { });
+                                    }}
+                                    whileHover={{ scale: 1.02 }}
+                                    whileTap={{ scale: 0.98 }}
+                                    style={{ flex: 1, padding: '14px', background: otpCopied ? 'rgba(75, 255, 120, 0.15)' : 'rgba(255,255,255,0.05)', color: otpCopied ? 'var(--success)' : 'var(--text-main)', border: otpCopied ? '1px solid rgba(75, 255, 120, 0.3)' : '1px solid var(--glass-border)', borderRadius: '12px', fontWeight: '700', fontSize: '0.9rem', cursor: 'pointer', transition: 'all 0.3s ease' }}
+                                >
+                                    {otpCopied ? '✓ Copied!' : 'Copy OTP'}
+                                </motion.button>
+                                <motion.button
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(generatedOtp).catch(() => { });
+                                        setShowOtpPopup(false);
+                                        setOtpCopied(false);
+                                    }}
+                                    whileHover={{ scale: 1.02 }}
+                                    whileTap={{ scale: 0.98 }}
+                                    style={{ flex: 1, padding: '14px', background: 'var(--text-main)', color: 'var(--bg-base)', border: 'none', borderRadius: '12px', fontWeight: '700', fontSize: '0.9rem', cursor: 'pointer', transition: 'all 0.3s ease', boxShadow: '0 4px 14px 0 rgba(255,255,255,0.1)' }}
+                                >
+                                    Copy & Close
+                                </motion.button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 };

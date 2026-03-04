@@ -5,6 +5,7 @@ import Chat from './components/Chat';
 import Lobby from './components/Lobby';
 import LandingPage from './components/LandingPage';
 import ProfileDashboard from './components/ProfileDashboard';
+import VideoCall from './components/VideoCall';
 import Navbar from './components/Navbar';
 
 // Protected Route Component
@@ -86,6 +87,12 @@ function App() {
           <Route path="/profile" element={
             <ProtectedRoute user={user}>
               <ProfileDashboard />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/meeting/:meetingCode?" element={
+            <ProtectedRoute user={user}>
+              <VideoCall user={user} />
             </ProtectedRoute>
           } />
 

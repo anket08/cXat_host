@@ -35,4 +35,10 @@ public class ChatController {
 public boolean roomExists(@PathVariable String roomId) {
     return chatService.roomExists(roomId);
 }
+@GetMapping("/recent/{userId}")
+public List<Message> recent(@PathVariable String userId){
+
+    return chatService.getRecentChats(userId);
+
+}
 }

@@ -7,9 +7,13 @@ import com.chat.cxat.model.Message;
 import java.util.List;
 
 import org.springframework.data.mongodb.repository.MongoRepository;
+import org.springframework.data.mongodb.repository.Query;
 
 public interface MessageRepository extends MongoRepository<Message, String> {
     List<Message> findByRoomIdOrderByCreatedAtAsc(String roomId);
+
+    @Query("{senderId:?0}")
+List<Message> findRecentMessages(String userId);
 }
 
 
