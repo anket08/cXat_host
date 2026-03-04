@@ -48,12 +48,19 @@ const Lobby = ({ user, onJoinRoom, onLogout }) => {
                         meetingItems = meetRes.data.map(p => {
                             let durationStr = 'Active';
                             if (p.leftAt && p.joinedAt) {
-                                const joinMs = new Date(p.joinedAt.endsWith('Z') ? p.joinedAt : p.joinedAt + 'Z').getTime();
-                                const leftMs = new Date(p.leftAt.endsWith('Z') ? p.leftAt : p.leftAt + 'Z').getTime();
-                                const durSec = Math.max(0, Math.floor((leftMs - joinMs) / 1000));
-                                const mins = Math.floor(durSec / 60);
-                                const secs = durSec % 60;
-                                durationStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+                                // Handle both epoch millis and ISO string formats
+                                const parseTime = (t) => {
+                                    if (/^\d+$/.test(t)) return parseInt(t, 10); // epoch millis
+                                    return new Date(t.endsWith('Z') ? t : t + 'Z').getTime();
+                                };
+                                const joinMs = parseTime(p.joinedAt);
+                                const leftMs = parseTime(p.leftAt);
+                                if (!isNaN(joinMs) && !isNaN(leftMs)) {
+                                    const durSec = Math.max(0, Math.floor((leftMs - joinMs) / 1000));
+                                    const mins = Math.floor(durSec / 60);
+                                    const secs = durSec % 60;
+                                    durationStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+                                }
                             }
                             return {
                                 id: `call-${p.meetingCode}-${p.id}`,

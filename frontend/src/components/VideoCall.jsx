@@ -33,8 +33,13 @@ const VideoCall = ({ user }) => {
     const { meetingCode: paramCode } = useParams();
     const navigate = useNavigate();
 
+    // ── Identifiers ───────────────────────────────────
+    // sessionId = unique per browser tab (for signal dedup)
+    // userId    = user.id (for backend API calls)
+    const [sessionId] = useState(() => (user?.id || 'anon') + '-' + Math.random().toString(36).slice(2, 8));
+    const userId = user?.id || user?.username || 'unknown';
+
     // ── State ──────────────────────────────────────────
-    const myId = user?.id || user?.username || 'unknown';
     const [phase, setPhase] = useState(paramCode ? 'joining' : 'lobby');
     const [meetingCode, setMeetingCode] = useState(paramCode || '');
     const [joinInput, setJoinInput] = useState('');
@@ -55,6 +60,7 @@ const VideoCall = ({ user }) => {
     const peerConnectionRef = useRef(null);
     const stompRef = useRef(null);
     const timerRef = useRef(null);
+    const iceCandidateQueue = useRef([]);
 
     // ── Helpers ────────────────────────────────────────
     const showToast = (msg) => {
@@ -94,6 +100,7 @@ const VideoCall = ({ user }) => {
     const createPeerConnection = useCallback((stompClient, code) => {
         const pc = new RTCPeerConnection(ICE_SERVERS);
         peerConnectionRef.current = pc;
+        iceCandidateQueue.current = []; // Reset queue for new connection
         console.log('[cXat] PeerConnection created');
 
         // Add local tracks
@@ -113,13 +120,13 @@ const VideoCall = ({ user }) => {
             }
         };
 
-        // ICE candidates
+        // ICE candidates — send via signaling
         pc.onicecandidate = (event) => {
             if (event.candidate && stompClient?.connected) {
                 console.log('[cXat] Sending ICE candidate');
                 stompClient.send('/app/signal', {}, JSON.stringify({
                     type: 'ice-candidate',
-                    senderId: myId,
+                    senderId: sessionId,
                     meetingCode: code,
                     data: JSON.stringify(event.candidate),
                 }));
@@ -138,7 +145,16 @@ const VideoCall = ({ user }) => {
         };
 
         return pc;
-    }, [myId]);
+    }, [sessionId]);
+
+    // ── Drain queued ICE candidates ───────────────────
+    const drainIceCandidates = async (pc) => {
+        while (iceCandidateQueue.current.length > 0) {
+            const c = iceCandidateQueue.current.shift();
+            await pc.addIceCandidate(c);
+            console.log('[cXat] Applied queued ICE candidate');
+        }
+    };
 
     // ── STOMP signaling ───────────────────────────────
     const connectSignaling = useCallback((code) => {
@@ -155,8 +171,8 @@ const VideoCall = ({ user }) => {
                 client.subscribe(`/topic/signal/${code}`, async (msg) => {
                     const signal = JSON.parse(msg.body);
 
-                    // Ignore own signals
-                    if (String(signal.senderId) === String(myId)) return;
+                    // Ignore own signals (using unique session ID)
+                    if (signal.senderId === sessionId) return;
 
                     const pc = peerConnectionRef.current;
                     if (!pc) return;
@@ -165,23 +181,30 @@ const VideoCall = ({ user }) => {
                         if (signal.type === 'offer') {
                             console.log('[cXat] Received offer');
                             await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(signal.data)));
+                            await drainIceCandidates(pc);
                             const answer = await pc.createAnswer();
                             await pc.setLocalDescription(answer);
                             console.log('[cXat] Sending answer');
                             client.send('/app/signal', {}, JSON.stringify({
                                 type: 'answer',
-                                senderId: myId,
+                                senderId: sessionId,
                                 meetingCode: code,
                                 data: JSON.stringify(answer),
                             }));
                         } else if (signal.type === 'answer') {
                             console.log('[cXat] Received answer');
                             await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(signal.data)));
+                            await drainIceCandidates(pc);
                         } else if (signal.type === 'ice-candidate') {
-                            console.log('[cXat] Received ICE candidate');
-                            await pc.addIceCandidate(new RTCIceCandidate(JSON.parse(signal.data)));
+                            const candidate = new RTCIceCandidate(JSON.parse(signal.data));
+                            if (pc.remoteDescription) {
+                                console.log('[cXat] Adding ICE candidate');
+                                await pc.addIceCandidate(candidate);
+                            } else {
+                                console.log('[cXat] Queuing ICE candidate (no remote desc yet)');
+                                iceCandidateQueue.current.push(candidate);
+                            }
                         } else if (signal.type === 'user-joined') {
-                            // New user joined; create and send an offer
                             console.log('[cXat] User joined, creating offer...');
                             showToast('A participant joined!');
                             const offer = await pc.createOffer();
@@ -189,7 +212,7 @@ const VideoCall = ({ user }) => {
                             console.log('[cXat] Sending offer');
                             client.send('/app/signal', {}, JSON.stringify({
                                 type: 'offer',
-                                senderId: myId,
+                                senderId: sessionId,
                                 meetingCode: code,
                                 data: JSON.stringify(offer),
                             }));
@@ -208,14 +231,13 @@ const VideoCall = ({ user }) => {
                 resolve(null);
             });
         });
-    }, [myId]);
+    }, [sessionId]);
 
     const fetchParticipants = async (code) => {
         try {
             const res = await axios.get(`${API}/meeting/participants/${code}`);
             if (Array.isArray(res.data)) {
                 const active = res.data.filter(p => !p.leftAt);
-                // Deduplicate by userId — keep only unique
                 const unique = active.filter((p, idx, arr) => arr.findIndex(x => x.userId === p.userId) === idx);
                 setParticipants(unique);
             }
@@ -229,14 +251,12 @@ const VideoCall = ({ user }) => {
         if (!stream) return;
 
         try {
-            const res = await axios.post(`${API}/meeting/create?hostId=${myId}`);
+            const res = await axios.post(`${API}/meeting/create?hostId=${userId}`);
             const code = res.data.meetingCode;
             setMeetingCode(code);
 
-            // Join the meeting
-            await axios.post(`${API}/meeting/join?meetingCode=${code}&userId=${myId}`);
+            await axios.post(`${API}/meeting/join?meetingCode=${code}&userId=${userId}`);
 
-            // Connect signaling FIRST, THEN create peer connection
             const stompClient = await connectSignaling(code);
             createPeerConnection(stompClient, code);
 
@@ -244,10 +264,7 @@ const VideoCall = ({ user }) => {
             showToast('Meeting created! Share the code.');
             fetchParticipants(code);
 
-            // Start timer
             timerRef.current = setInterval(() => setCallSeconds(s => s + 1), 1000);
-
-            // Navigate to meeting URL
             navigate(`/meeting/${code}`, { replace: true });
         } catch (err) {
             console.error('[cXat] Create meeting error:', err);
@@ -268,7 +285,7 @@ const VideoCall = ({ user }) => {
         if (!stream) return;
 
         try {
-            const res = await axios.post(`${API}/meeting/join?meetingCode=${meetCode}&userId=${myId}`);
+            const res = await axios.post(`${API}/meeting/join?meetingCode=${meetCode}&userId=${userId}`);
             if (res.data === 'Meeting not found') {
                 setError('Meeting not found. Check the code and try again.');
                 return;
@@ -280,16 +297,15 @@ const VideoCall = ({ user }) => {
 
             setMeetingCode(meetCode);
 
-            // Connect signaling FIRST, THEN create peer connection
             const stompClient = await connectSignaling(meetCode);
             createPeerConnection(stompClient, meetCode);
 
-            // Notify others that we joined (triggers offer creation from host)
+            // Notify others that we joined
             if (stompClient?.connected) {
                 console.log('[cXat] Sending user-joined signal');
                 stompClient.send('/app/signal', {}, JSON.stringify({
                     type: 'user-joined',
-                    senderId: myId,
+                    senderId: sessionId,
                     meetingCode: meetCode,
                     data: '',
                 }));
@@ -316,7 +332,6 @@ const VideoCall = ({ user }) => {
 
     // ── Leave / End ───────────────────────────────────
     const handleEndCall = async () => {
-        // Stop timer FIRST
         if (timerRef.current) {
             clearInterval(timerRef.current);
             timerRef.current = null;
@@ -328,7 +343,7 @@ const VideoCall = ({ user }) => {
         if (stompRef.current?.connected) stompRef.current.disconnect();
 
         try {
-            await axios.post(`${API}/meeting/leave?meetingCode=${meetingCode}&userId=${myId}`);
+            await axios.post(`${API}/meeting/leave?meetingCode=${meetingCode}&userId=${userId}`);
         } catch (e) { /* ignore */ }
 
         setRemoteHasStream(false);
@@ -361,6 +376,13 @@ const VideoCall = ({ user }) => {
             clearInterval(timerRef.current);
         };
     }, []);
+
+    // ── Re-attach local stream when entering incall ───
+    useEffect(() => {
+        if (phase === 'incall' && localStreamRef.current && localVideoRef.current) {
+            localVideoRef.current.srcObject = localStreamRef.current;
+        }
+    }, [phase]);
 
     // ══════════════════════════════════════════════════
     // RENDER
@@ -409,7 +431,6 @@ const VideoCall = ({ user }) => {
     if (phase === 'lobby' || phase === 'joining') {
         return (
             <div className="vc-page">
-                {/* Ambient */}
                 <div className="vc-ambient">
                     <motion.div
                         animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.5, 0.3], x: ['0%', '5%', '0%'], y: ['0%', '5%', '0%'] }}
@@ -471,7 +492,6 @@ const VideoCall = ({ user }) => {
     // ── In-call view ──────────────────────────────────
     return (
         <div className="vc-page">
-            {/* Ambient */}
             <div className="vc-ambient">
                 <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at 50% 50%, rgba(13,17,23,0) 0%, var(--bg-base) 100%)' }} />
             </div>
@@ -511,7 +531,7 @@ const VideoCall = ({ user }) => {
                         {participants
                             .filter((p, idx, arr) => arr.findIndex(x => x.userId === p.userId) === idx)
                             .map((p, i) => {
-                                const isMe = p.userId === myId;
+                                const isMe = p.userId === userId;
                                 const displayName = isMe ? (user?.username || p.userId) : p.userId;
                                 return (
                                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', background: 'rgba(255,255,255,0.04)', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
@@ -559,14 +579,18 @@ const VideoCall = ({ user }) => {
 
             {/* Videos */}
             <div className="vc-videos">
-                {/* Remote video — always rendered, visibility toggled */}
-                <video
-                    ref={remoteVideoRef}
-                    autoPlay
-                    playsInline
-                    className="vc-remote-video"
-                    style={{ display: remoteHasStream ? 'block' : 'none' }}
-                />
+                {/* Remote video */}
+                <div style={{ position: 'relative', width: '100%', height: '100%', display: remoteHasStream ? 'block' : 'none' }}>
+                    <video
+                        ref={remoteVideoRef}
+                        autoPlay
+                        playsInline
+                        className="vc-remote-video"
+                    />
+                    <div className="vc-local-label" style={{ bottom: 16, left: 16, fontSize: '0.85rem', padding: '5px 14px' }}>
+                        {participants.find(p => p.userId !== userId)?.userId || 'Peer'}
+                    </div>
+                </div>
 
                 {/* Placeholder when no remote stream */}
                 {!remoteHasStream && (
@@ -593,7 +617,7 @@ const VideoCall = ({ user }) => {
                         playsInline
                         className="vc-local-video"
                     />
-                    <div className="vc-local-label">You</div>
+                    <div className="vc-local-label">{user?.username || 'You'}</div>
                 </motion.div>
             </div>
 
