@@ -5,7 +5,7 @@ import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Video, VideoOff, Mic, MicOff, PhoneOff, Copy, Check,
-    ChevronLeft, Users, Clock, Zap, MonitorUp
+    ChevronLeft, Users, Clock, Zap, MonitorUp, X
 } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import './VideoCall.css';
@@ -16,6 +16,16 @@ const ICE_SERVERS = {
     iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
+        {
+            urls: 'turn:openrelay.metered.ca:80',
+            username: 'openrelayproject',
+            credential: 'openrelayproject',
+        },
+        {
+            urls: 'turn:openrelay.metered.ca:443',
+            username: 'openrelayproject',
+            credential: 'openrelayproject',
+        },
     ],
 };
 
@@ -24,7 +34,8 @@ const VideoCall = ({ user }) => {
     const navigate = useNavigate();
 
     // ── State ──────────────────────────────────────────
-    const [phase, setPhase] = useState(paramCode ? 'joining' : 'lobby'); // lobby | joining | incall | ended
+    const myId = user?.id || user?.username || 'unknown';
+    const [phase, setPhase] = useState(paramCode ? 'joining' : 'lobby');
     const [meetingCode, setMeetingCode] = useState(paramCode || '');
     const [joinInput, setJoinInput] = useState('');
     const [isMuted, setIsMuted] = useState(false);
@@ -34,6 +45,8 @@ const VideoCall = ({ user }) => {
     const [participants, setParticipants] = useState([]);
     const [callSeconds, setCallSeconds] = useState(0);
     const [error, setError] = useState('');
+    const [remoteHasStream, setRemoteHasStream] = useState(false);
+    const [showParticipants, setShowParticipants] = useState(false);
 
     // ── Refs ───────────────────────────────────────────
     const localVideoRef = useRef(null);
@@ -68,9 +81,10 @@ const VideoCall = ({ user }) => {
             const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
             localStreamRef.current = stream;
             if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+            console.log('[cXat] Local stream started');
             return stream;
         } catch (err) {
-            console.error('Media error:', err);
+            console.error('[cXat] Media error:', err);
             setError('Camera/Microphone access denied. Please allow permissions and try again.');
             return null;
         }
@@ -80,27 +94,32 @@ const VideoCall = ({ user }) => {
     const createPeerConnection = useCallback((stompClient, code) => {
         const pc = new RTCPeerConnection(ICE_SERVERS);
         peerConnectionRef.current = pc;
+        console.log('[cXat] PeerConnection created');
 
         // Add local tracks
         if (localStreamRef.current) {
             localStreamRef.current.getTracks().forEach(track => {
                 pc.addTrack(track, localStreamRef.current);
             });
+            console.log('[cXat] Local tracks added');
         }
 
         // Handle remote stream
         pc.ontrack = (event) => {
+            console.log('[cXat] Remote track received!', event.streams);
             if (remoteVideoRef.current && event.streams[0]) {
                 remoteVideoRef.current.srcObject = event.streams[0];
+                setRemoteHasStream(true);
             }
         };
 
         // ICE candidates
         pc.onicecandidate = (event) => {
             if (event.candidate && stompClient?.connected) {
+                console.log('[cXat] Sending ICE candidate');
                 stompClient.send('/app/signal', {}, JSON.stringify({
                     type: 'ice-candidate',
-                    senderId: user.id,
+                    senderId: myId,
                     meetingCode: code,
                     data: JSON.stringify(event.candidate),
                 }));
@@ -108,13 +127,18 @@ const VideoCall = ({ user }) => {
         };
 
         pc.oniceconnectionstatechange = () => {
+            console.log('[cXat] ICE state:', pc.iceConnectionState);
+            if (pc.iceConnectionState === 'connected') {
+                showToast('Peer connected!');
+            }
             if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
                 showToast('Peer disconnected');
+                setRemoteHasStream(false);
             }
         };
 
         return pc;
-    }, [user.id]);
+    }, [myId]);
 
     // ── STOMP signaling ───────────────────────────────
     const connectSignaling = useCallback((code) => {
@@ -125,63 +149,75 @@ const VideoCall = ({ user }) => {
             stompRef.current = client;
 
             client.connect({}, () => {
+                console.log('[cXat] WebSocket connected');
+
                 // Subscribe to signaling topic
                 client.subscribe(`/topic/signal/${code}`, async (msg) => {
                     const signal = JSON.parse(msg.body);
 
                     // Ignore own signals
-                    if (String(signal.senderId) === String(user.id)) return;
+                    if (String(signal.senderId) === String(myId)) return;
 
                     const pc = peerConnectionRef.current;
                     if (!pc) return;
 
                     try {
                         if (signal.type === 'offer') {
+                            console.log('[cXat] Received offer');
                             await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(signal.data)));
                             const answer = await pc.createAnswer();
                             await pc.setLocalDescription(answer);
+                            console.log('[cXat] Sending answer');
                             client.send('/app/signal', {}, JSON.stringify({
                                 type: 'answer',
-                                senderId: user.id,
+                                senderId: myId,
                                 meetingCode: code,
                                 data: JSON.stringify(answer),
                             }));
                         } else if (signal.type === 'answer') {
+                            console.log('[cXat] Received answer');
                             await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(signal.data)));
                         } else if (signal.type === 'ice-candidate') {
+                            console.log('[cXat] Received ICE candidate');
                             await pc.addIceCandidate(new RTCIceCandidate(JSON.parse(signal.data)));
                         } else if (signal.type === 'user-joined') {
                             // New user joined; create and send an offer
+                            console.log('[cXat] User joined, creating offer...');
                             showToast('A participant joined!');
                             const offer = await pc.createOffer();
                             await pc.setLocalDescription(offer);
+                            console.log('[cXat] Sending offer');
                             client.send('/app/signal', {}, JSON.stringify({
                                 type: 'offer',
-                                senderId: user.id,
+                                senderId: myId,
                                 meetingCode: code,
                                 data: JSON.stringify(offer),
                             }));
                             fetchParticipants(code);
                         }
                     } catch (err) {
-                        console.error('Signal handling error:', err);
+                        console.error('[cXat] Signal handling error:', err);
                     }
                 });
 
+                console.log('[cXat] Subscribed to /topic/signal/' + code);
                 resolve(client);
             }, (err) => {
-                console.error('STOMP error:', err);
+                console.error('[cXat] STOMP error:', err);
                 setError('Failed to connect to signaling server.');
                 resolve(null);
             });
         });
-    }, [user.id]);
+    }, [myId]);
 
     const fetchParticipants = async (code) => {
         try {
             const res = await axios.get(`${API}/meeting/participants/${code}`);
             if (Array.isArray(res.data)) {
-                setParticipants(res.data.filter(p => !p.leftAt));
+                const active = res.data.filter(p => !p.leftAt);
+                // Deduplicate by userId — keep only unique
+                const unique = active.filter((p, idx, arr) => arr.findIndex(x => x.userId === p.userId) === idx);
+                setParticipants(unique);
             }
         } catch (e) { /* ignore */ }
     };
@@ -193,14 +229,14 @@ const VideoCall = ({ user }) => {
         if (!stream) return;
 
         try {
-            const res = await axios.post(`${API}/meeting/create?hostId=${user.id}`);
+            const res = await axios.post(`${API}/meeting/create?hostId=${myId}`);
             const code = res.data.meetingCode;
             setMeetingCode(code);
 
             // Join the meeting
-            await axios.post(`${API}/meeting/join?meetingCode=${code}&userId=${user.id}`);
+            await axios.post(`${API}/meeting/join?meetingCode=${code}&userId=${myId}`);
 
-            // Connect signaling + create peer connection
+            // Connect signaling FIRST, THEN create peer connection
             const stompClient = await connectSignaling(code);
             createPeerConnection(stompClient, code);
 
@@ -214,7 +250,7 @@ const VideoCall = ({ user }) => {
             // Navigate to meeting URL
             navigate(`/meeting/${code}`, { replace: true });
         } catch (err) {
-            console.error('Create meeting error:', err);
+            console.error('[cXat] Create meeting error:', err);
             setError('Failed to create meeting. Is the server running?');
         }
     };
@@ -232,7 +268,7 @@ const VideoCall = ({ user }) => {
         if (!stream) return;
 
         try {
-            const res = await axios.post(`${API}/meeting/join?meetingCode=${meetCode}&userId=${user.id}`);
+            const res = await axios.post(`${API}/meeting/join?meetingCode=${meetCode}&userId=${myId}`);
             if (res.data === 'Meeting not found') {
                 setError('Meeting not found. Check the code and try again.');
                 return;
@@ -244,15 +280,16 @@ const VideoCall = ({ user }) => {
 
             setMeetingCode(meetCode);
 
-            // Connect signaling + create peer connection
+            // Connect signaling FIRST, THEN create peer connection
             const stompClient = await connectSignaling(meetCode);
-            const pc = createPeerConnection(stompClient, meetCode);
+            createPeerConnection(stompClient, meetCode);
 
-            // Notify others that we joined
+            // Notify others that we joined (triggers offer creation from host)
             if (stompClient?.connected) {
+                console.log('[cXat] Sending user-joined signal');
                 stompClient.send('/app/signal', {}, JSON.stringify({
                     type: 'user-joined',
-                    senderId: user.id,
+                    senderId: myId,
                     meetingCode: meetCode,
                     data: '',
                 }));
@@ -265,7 +302,7 @@ const VideoCall = ({ user }) => {
             timerRef.current = setInterval(() => setCallSeconds(s => s + 1), 1000);
             navigate(`/meeting/${meetCode}`, { replace: true });
         } catch (err) {
-            console.error('Join error:', err);
+            console.error('[cXat] Join error:', err);
             setError('Failed to join meeting.');
         }
     };
@@ -279,22 +316,22 @@ const VideoCall = ({ user }) => {
 
     // ── Leave / End ───────────────────────────────────
     const handleEndCall = async () => {
-        // Stop local media
-        localStreamRef.current?.getTracks().forEach(t => t.stop());
+        // Stop timer FIRST
+        if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
+        }
 
-        // Close peer connection
+        localStreamRef.current?.getTracks().forEach(t => t.stop());
         peerConnectionRef.current?.close();
         peerConnectionRef.current = null;
-
-        // Disconnect STOMP
         if (stompRef.current?.connected) stompRef.current.disconnect();
 
-        // Leave meeting via API
         try {
-            await axios.post(`${API}/meeting/leave?meetingCode=${meetingCode}&userId=${user.id}`);
+            await axios.post(`${API}/meeting/leave?meetingCode=${meetingCode}&userId=${myId}`);
         } catch (e) { /* ignore */ }
 
-        clearInterval(timerRef.current);
+        setRemoteHasStream(false);
         setPhase('ended');
     };
 
@@ -453,6 +490,45 @@ const VideoCall = ({ user }) => {
                 )}
             </AnimatePresence>
 
+            {/* Participants Panel */}
+            <AnimatePresence>
+                {showParticipants && (
+                    <motion.div
+                        initial={{ opacity: 0, x: 300 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 300 }}
+                        style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: '280px', background: 'rgba(22,27,34,0.95)', backdropFilter: 'blur(12px)', borderLeft: '1px solid var(--glass-border)', zIndex: 100, padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}
+                    >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                            <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#fff' }}>
+                                <Users size={16} style={{ marginRight: '8px', verticalAlign: 'middle' }} />
+                                Participants ({participants.length})
+                            </h3>
+                            <button onClick={() => setShowParticipants(false)} style={{ background: 'none', border: 'none', color: '#8b949e', cursor: 'pointer' }}>
+                                <X size={18} />
+                            </button>
+                        </div>
+                        {participants
+                            .filter((p, idx, arr) => arr.findIndex(x => x.userId === p.userId) === idx)
+                            .map((p, i) => {
+                                const isMe = p.userId === myId;
+                                const displayName = isMe ? (user?.username || p.userId) : p.userId;
+                                return (
+                                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', background: 'rgba(255,255,255,0.04)', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                                        <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: isMe ? 'linear-gradient(135deg, #3fb950, #79c0ff)' : 'linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700, color: '#fff' }}>
+                                            {displayName.charAt(0).toUpperCase()}
+                                        </div>
+                                        <div>
+                                            <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff' }}>{displayName} {isMe && <span style={{ color: '#8b949e', fontWeight: 400 }}>(You)</span>}</div>
+                                            <div style={{ fontSize: '0.7rem', color: '#3fb950' }}>● Active</div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             {/* Header */}
             <div className="vc-header">
                 <div className="vc-header-left">
@@ -467,9 +543,13 @@ const VideoCall = ({ user }) => {
                     </div>
                 </div>
                 <div className="vc-header-right">
-                    <div className="vc-participants-badge">
+                    <button
+                        className="vc-participants-badge"
+                        onClick={() => { setShowParticipants(!showParticipants); fetchParticipants(meetingCode); }}
+                        style={{ cursor: 'pointer', background: 'rgba(255,255,255,0.06)', border: '1px solid var(--glass-border)', borderRadius: '20px', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '6px', color: '#fff', fontSize: '0.85rem', fontWeight: 600 }}
+                    >
                         <Users size={16} /> {participants.length}
-                    </div>
+                    </button>
                     <div className="vc-timer">
                         <div className="vc-timer-dot" />
                         {formatTimer(callSeconds)}
@@ -479,15 +559,17 @@ const VideoCall = ({ user }) => {
 
             {/* Videos */}
             <div className="vc-videos">
-                {/* Remote video */}
-                {remoteVideoRef.current?.srcObject ? (
-                    <video
-                        ref={remoteVideoRef}
-                        autoPlay
-                        playsInline
-                        className="vc-remote-video"
-                    />
-                ) : (
+                {/* Remote video — always rendered, visibility toggled */}
+                <video
+                    ref={remoteVideoRef}
+                    autoPlay
+                    playsInline
+                    className="vc-remote-video"
+                    style={{ display: remoteHasStream ? 'block' : 'none' }}
+                />
+
+                {/* Placeholder when no remote stream */}
+                {!remoteHasStream && (
                     <div className="vc-remote-placeholder">
                         <div className="vc-remote-placeholder-icon">
                             <Users size={42} />
@@ -496,15 +578,6 @@ const VideoCall = ({ user }) => {
                         <p style={{ fontSize: '0.85rem', opacity: 0.6 }}>Share the meeting code: <strong style={{ color: 'var(--accent-tertiary)', letterSpacing: '2px' }}>{meetingCode}</strong></p>
                     </div>
                 )}
-
-                {/* Hidden remote video element (always present for ref attachment) */}
-                <video
-                    ref={remoteVideoRef}
-                    autoPlay
-                    playsInline
-                    className="vc-remote-video"
-                    style={{ display: remoteVideoRef.current?.srcObject ? 'block' : 'none', position: 'absolute', inset: 0, width: '100%', height: '100%' }}
-                />
 
                 {/* Local PiP */}
                 <motion.div

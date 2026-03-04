@@ -85,10 +85,9 @@ public class MeetingService {
         if (!"ACTIVE".equals(meeting.getStatus()))
             return "Meeting ended";
 
-        MeetingParticipant existing =
-                participantRepository.findByMeetingCodeAndUserId(
-                        meetingCode,
-                        userId);
+        MeetingParticipant existing = participantRepository.findByMeetingCodeAndUserId(
+                meetingCode,
+                userId);
 
         if (existing != null)
             return "Already joined";
@@ -112,10 +111,9 @@ public class MeetingService {
 
     public String leaveMeeting(String meetingCode, String userId) {
 
-        MeetingParticipant participant =
-                participantRepository.findByMeetingCodeAndUserId(
-                        meetingCode,
-                        userId);
+        MeetingParticipant participant = participantRepository.findByMeetingCodeAndUserId(
+                meetingCode,
+                userId);
 
         if (participant == null)
             return "Not in meeting";
@@ -160,6 +158,17 @@ public class MeetingService {
     public List<MeetingParticipant> getParticipants(String meetingCode) {
 
         return participantRepository.findByMeetingCode(meetingCode);
+    }
+
+    /*
+     * =========================
+     * GET USER'S MEETINGS
+     * =========================
+     */
+
+    public List<MeetingParticipant> getUserMeetings(String userId) {
+
+        return participantRepository.findByUserId(userId);
     }
 
 }

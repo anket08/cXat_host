@@ -85,4 +85,17 @@ public class MeetingController {
         return meetingService.getParticipants(code);
     }
 
+    /*
+     * =========================
+     * GET USER'S MEETINGS
+     * =========================
+     */
+
+    @GetMapping("/user/{userId}")
+    public List<MeetingParticipant> getUserMeetings(
+            @PathVariable String userId) {
+
+        return meetingService.getUserMeetings(userId);
+    }
+
 }

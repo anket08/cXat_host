@@ -40,21 +40,32 @@ const Lobby = ({ user, onJoinRoom, onLogout }) => {
                     }));
                 }
 
-                // Fetch recent meetings
+                // Fetch recent call logs from DB
                 let meetingItems = [];
                 try {
-                    const meetRes = await axios.get(`${API}/meeting/participants/${user.id}`);
+                    const meetRes = await axios.get(`${API}/meeting/user/${user.id}`);
                     if (Array.isArray(meetRes.data)) {
-                        meetingItems = meetRes.data.filter(p => !p.leftAt).map(p => ({
-                            id: `meeting-${p.meetingCode}`,
-                            type: 'call',
-                            label: p.meetingCode,
-                            preview: 'Video call',
-                            time: p.joinedAt,
-                            route: `/meeting/${p.meetingCode}`,
-                        }));
+                        meetingItems = meetRes.data.map(p => {
+                            let durationStr = 'Active';
+                            if (p.leftAt && p.joinedAt) {
+                                const joinMs = new Date(p.joinedAt.endsWith('Z') ? p.joinedAt : p.joinedAt + 'Z').getTime();
+                                const leftMs = new Date(p.leftAt.endsWith('Z') ? p.leftAt : p.leftAt + 'Z').getTime();
+                                const durSec = Math.max(0, Math.floor((leftMs - joinMs) / 1000));
+                                const mins = Math.floor(durSec / 60);
+                                const secs = durSec % 60;
+                                durationStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+                            }
+                            return {
+                                id: `call-${p.meetingCode}-${p.id}`,
+                                type: 'call',
+                                label: p.meetingCode,
+                                preview: `Video call · ${durationStr}`,
+                                time: p.joinedAt,
+                                route: `/meeting/${p.meetingCode}`,
+                            };
+                        });
                     }
-                } catch (e) { /* meetings endpoint may not support this query yet */ }
+                } catch (e) { /* ignore */ }
 
                 // Merge and sort by latest
                 const all = [...chatItems, ...meetingItems].sort((a, b) =>
@@ -70,20 +81,23 @@ const Lobby = ({ user, onJoinRoom, onLogout }) => {
         fetchRecent();
     }, [user?.id]);
 
-    // Helper: format relative time
+    // Helper: format relative time (UTC → IST)
     const formatRelativeTime = (isoString) => {
         if (!isoString) return '';
-        const date = new Date(isoString);
+        // DB stores UTC — append Z if missing so browser treats as UTC
+        const utcStr = isoString.endsWith('Z') ? isoString : isoString + 'Z';
+        const date = new Date(utcStr);
         const now = new Date();
         const diffMs = now - date;
         const diffMin = Math.floor(diffMs / 60000);
         if (diffMin < 1) return 'now';
-        if (diffMin < 60) return `${diffMin}m`;
+        if (diffMin < 60) return `${diffMin}m ago`;
         const diffHr = Math.floor(diffMin / 60);
-        if (diffHr < 24) return `${diffHr}h`;
+        if (diffHr < 24) return `${diffHr}h ago`;
         const diffDay = Math.floor(diffHr / 24);
-        if (diffDay < 7) return `${diffDay}d`;
-        return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        if (diffDay < 7) return `${diffDay}d ago`;
+        // For older dates, show IST formatted date
+        return date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', timeZone: 'Asia/Kolkata' });
     };
 
     const handleCreateRoom = async () => {

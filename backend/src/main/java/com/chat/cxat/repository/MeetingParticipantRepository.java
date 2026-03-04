@@ -15,4 +15,7 @@ public interface MeetingParticipantRepository extends MongoRepository<MeetingPar
     // check if user already joined
     MeetingParticipant findByMeetingCodeAndUserId(String meetingCode, String userId);
 
+    // find all meetings for a user
+    List<MeetingParticipant> findByUserId(String userId);
+
 }
