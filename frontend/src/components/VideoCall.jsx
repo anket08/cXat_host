@@ -247,9 +247,10 @@ const VideoCall = ({ user }) => {
     const connectSignaling = useCallback((code) => {
         return new Promise((resolve) => {
             // Use WSS for production
-            const wsUrl = window.location.protocol === 'https:' && API.startsWith('http')
-                ? API.replace('http', 'https') + '/ws'
-                : `${API}/ws`;
+            let wsUrl = `${API}/ws`;
+            if (window.location.protocol === 'https:' && wsUrl.startsWith('http://')) {
+                wsUrl = wsUrl.replace('http://', 'https://');
+            }
 
             const socket = new SockJS(wsUrl);
             const client = Stomp.over(socket);
