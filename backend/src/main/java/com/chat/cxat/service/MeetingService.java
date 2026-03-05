@@ -89,8 +89,14 @@ public class MeetingService {
                 meetingCode,
                 userId);
 
-        if (existing != null)
+        if (existing != null) {
+            if (existing.getLeftAt() != null) {
+                existing.setLeftAt(null);
+                existing.setJoinedAt(java.time.LocalDateTime.now(java.time.ZoneOffset.UTC).toString());
+                participantRepository.save(existing);
+            }
             return "Already joined";
+        }
 
         MeetingParticipant participant = new MeetingParticipant();
 

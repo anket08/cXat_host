@@ -26,6 +26,11 @@ const ICE_SERVERS = {
             username: 'openrelayproject',
             credential: 'openrelayproject',
         },
+        {
+            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+            username: 'openrelayproject',
+            credential: 'openrelayproject',
+        },
     ],
 };
 
@@ -86,7 +91,10 @@ const VideoCall = ({ user }) => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
             localStreamRef.current = stream;
-            if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+            if (localVideoRef.current) {
+                localVideoRef.current.srcObject = stream;
+                localVideoRef.current.play().catch(e => console.error('[cXat] Local video auto-play blocked', e));
+            }
             console.log('[cXat] Local stream started');
             return stream;
         } catch (err) {
@@ -117,6 +125,7 @@ const VideoCall = ({ user }) => {
             if (remoteVideoRef.current && event.streams[0]) {
                 remoteVideoRef.current.srcObject = event.streams[0];
                 setRemoteHasStream(true);
+                remoteVideoRef.current.play().catch(e => console.error('[cXat] Remote video auto-play blocked:', e));
             }
         };
 
@@ -205,10 +214,18 @@ const VideoCall = ({ user }) => {
                                 iceCandidateQueue.current.push(candidate);
                             }
                         } else if (signal.type === 'user-joined') {
-                            console.log('[cXat] User joined, creating offer...');
+                            console.log('[cXat] User joined, creating fresh offer...');
                             showToast('A participant joined!');
-                            const offer = await pc.createOffer();
-                            await pc.setLocalDescription(offer);
+
+                            // Recreate PC for a clean slate (fixes stale ICE state dropped connections)
+                            let currentPc = peerConnectionRef.current;
+                            if (currentPc) {
+                                currentPc.close();
+                            }
+                            currentPc = createPeerConnection(client, code);
+
+                            const offer = await currentPc.createOffer();
+                            await currentPc.setLocalDescription(offer);
                             console.log('[cXat] Sending offer');
                             client.send('/app/signal', {}, JSON.stringify({
                                 type: 'offer',
@@ -377,10 +394,10 @@ const VideoCall = ({ user }) => {
         };
     }, []);
 
-    // ── Re-attach local stream when entering incall ───
     useEffect(() => {
         if (phase === 'incall' && localStreamRef.current && localVideoRef.current) {
             localVideoRef.current.srcObject = localStreamRef.current;
+            localVideoRef.current.play().catch(e => console.error('[cXat] Local PIP play error', e));
         }
     }, [phase]);
 
@@ -580,7 +597,7 @@ const VideoCall = ({ user }) => {
             {/* Videos */}
             <div className="vc-videos">
                 {/* Remote video */}
-                <div style={{ position: 'relative', width: '100%', height: '100%', display: remoteHasStream ? 'block' : 'none' }}>
+                <div style={{ position: 'relative', width: '100%', height: '100%', flex: 1, display: remoteHasStream ? 'flex' : 'none', alignItems: 'center', justifyContent: 'center' }}>
                     <video
                         ref={remoteVideoRef}
                         autoPlay
