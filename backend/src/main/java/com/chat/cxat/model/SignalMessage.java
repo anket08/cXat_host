@@ -6,9 +6,11 @@ public class SignalMessage {
     private String senderId;
     private String receiverId;
     private String meetingCode;
-    private String data;
+    // Changed to Object so Spring/Jackson parses nested JSON directly
+    private Object data;
 
-    public SignalMessage() {}
+    public SignalMessage() {
+    }
 
     public String getType() {
         return type;
@@ -26,7 +28,7 @@ public class SignalMessage {
         return meetingCode;
     }
 
-    public String getData() {
+    public Object getData() {
         return data;
     }
 
@@ -46,7 +48,7 @@ public class SignalMessage {
         this.meetingCode = meetingCode;
     }
 
-    public void setData(String data) {
+    public void setData(Object data) {
         this.data = data;
     }
 }
