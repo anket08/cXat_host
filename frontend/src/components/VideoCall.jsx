@@ -161,15 +161,27 @@ const VideoCall = ({ user }) => {
             });
         }
 
-        // Remote track
+        // Remote track (using native streams to ensure reliable playback)
         pc.ontrack = (ev) => {
             console.log('[cXat] remote track:', ev.track.kind, 'enabled:', ev.track.enabled);
-            if (!ev.streams?.[0]) return;
-            const stream = ev.streams[0];
-            console.log('[cXat] remote stream tracks:', stream.getTracks().map(t => `${t.kind}:${t.enabled}`).join(', '));
+            if (!ev.streams || !ev.streams[0]) return;
+
+            const remoteStream = ev.streams[0];
+            console.log('[cXat] remote stream tracks:', remoteStream.getTracks().map(t => `${t.kind}:${t.enabled}`).join(', '));
+
             if (remoteVideoRef.current) {
-                remoteVideoRef.current.srcObject = stream;
-                safePlay(remoteVideoRef.current, true); // isRemote=true → unmute
+                // Direct assignment as requested for stability
+                if (remoteVideoRef.current.srcObject !== remoteStream) {
+                    remoteVideoRef.current.srcObject = remoteStream;
+                }
+                remoteVideoRef.current.autoplay = true;
+                remoteVideoRef.current.playsInline = true;
+                remoteVideoRef.current.muted = false;
+
+                remoteVideoRef.current.play().catch(e => {
+                    if (e.name !== 'AbortError') console.error('[cXat] remote stream play error:', e);
+                });
+
                 setRemoteHasStream(true);
             }
         };
@@ -234,8 +246,18 @@ const VideoCall = ({ user }) => {
     // ── STOMP signaling (simplified — no user-joined) ────────────────
     const connectSignaling = useCallback((code) => {
         return new Promise((resolve) => {
-            const socket = new SockJS(`${API}/ws`);
+            // Use WSS for production
+            const wsUrl = window.location.protocol === 'https:' && API.startsWith('http')
+                ? API.replace('http', 'https') + '/ws'
+                : `${API}/ws`;
+
+            const socket = new SockJS(wsUrl);
             const client = Stomp.over(socket);
+
+            // WebSocket Keep-Alive configurations to prevent Render timeouts
+            client.heartbeat.outgoing = 20000;
+            client.heartbeat.incoming = 20000;
+            client.reconnect_delay = 5000;
             client.debug = null;
             stompRef.current = client;
 
@@ -258,11 +280,21 @@ const VideoCall = ({ user }) => {
                         if (sig.type === 'offer') {
                             const offerData = parseData(sig.data);
                             console.log('[cXat] got offer, signalingState:', pc.signalingState);
-                            // If we already have an offer pending, rollback first
-                            if (pc.signalingState !== 'stable') {
-                                console.log('[cXat] rolling back to accept new offer');
+
+                            // Perfect Negotiation: Polite vs Impolite peer to fix Glare (simultaneous offers)
+                            const offerCollision = pc.signalingState !== 'stable';
+                            const polite = sessionId < sig.senderId;
+
+                            if (offerCollision && !polite) {
+                                console.warn('[cXat] offer collision: I am impolite, ignoring remote offer.');
+                                return;
+                            }
+
+                            if (offerCollision && polite) {
+                                console.log('[cXat] offer collision: I am polite, rolling back my offer to accept new offer.');
                                 await pc.setLocalDescription({ type: 'rollback' });
                             }
+
                             await pc.setRemoteDescription(new RTCSessionDescription(offerData));
                             await drainQ(pc);
                             const ans = await pc.createAnswer();

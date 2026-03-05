@@ -5,6 +5,7 @@ import com.chat.cxat.model.MeetingParticipant;
 import com.chat.cxat.service.MeetingService;
 
 import org.springframework.web.bind.annotation.*;
+import org.springframework.scheduling.annotation.Scheduled;
 
 import java.util.List;
 
@@ -16,6 +17,21 @@ public class MeetingController {
 
     public MeetingController(MeetingService meetingService) {
         this.meetingService = meetingService;
+    }
+
+    /*
+     * =========================
+     * RENDER KEEP ALIVE
+     * =========================
+     */
+    @Scheduled(fixedRate = 30000)
+    public void keepAlive() {
+        // Keeps the container active to prevent WebSocket timeouts
+    }
+
+    @GetMapping("/ping")
+    public String ping() {
+        return "pong";
     }
 
     /*
