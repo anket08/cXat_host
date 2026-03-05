@@ -104,6 +104,10 @@ public class MeetingService {
 
         participant.setUserId(userId);
 
+        // Always store as ISO UTC string for consistent parsing
+        participant.setJoinedAt(
+                java.time.LocalDateTime.now(java.time.ZoneOffset.UTC).toString() + "Z");
+
         participantRepository.save(participant);
 
         return "Joined";
@@ -124,8 +128,9 @@ public class MeetingService {
         if (participant == null)
             return "Not in meeting";
 
+        // Store as ISO UTC string (same format as joinedAt)
         participant.setLeftAt(
-                String.valueOf(System.currentTimeMillis()));
+                java.time.LocalDateTime.now(java.time.ZoneOffset.UTC).toString() + "Z");
 
         participantRepository.save(participant);
 

@@ -5,46 +5,41 @@ import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Video, VideoOff, Mic, MicOff, PhoneOff, Copy, Check,
-    ChevronLeft, Users, Clock, Zap, MonitorUp, X
+    ChevronLeft, Users, Zap, MonitorUp, X
 } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import './VideoCall.css';
 
 const API = import.meta.env.VITE_API_URL;
 
+// ── ICE servers: multiple STUN + TURN with TCP fallbacks ─────────────────────
 const ICE_SERVERS = {
     iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
-        {
-            urls: 'turn:openrelay.metered.ca:80',
-            username: 'openrelayproject',
-            credential: 'openrelayproject',
-        },
-        {
-            urls: 'turn:openrelay.metered.ca:443',
-            username: 'openrelayproject',
-            credential: 'openrelayproject',
-        },
-        {
-            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-            username: 'openrelayproject',
-            credential: 'openrelayproject',
-        },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+        { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+        { urls: 'turn:openrelay.metered.ca:80?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+        { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+        { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+        { urls: 'turn:numb.viagenie.ca', username: 'webrtc@live.com', credential: 'muazkh' },
     ],
+    iceCandidatePoolSize: 20,
 };
 
 const VideoCall = ({ user }) => {
     const { meetingCode: paramCode } = useParams();
     const navigate = useNavigate();
 
-    // ── Identifiers ───────────────────────────────────
-    // sessionId = unique per browser tab (for signal dedup)
-    // userId    = user.id (for backend API calls)
-    const [sessionId] = useState(() => (user?.id || 'anon') + '-' + Math.random().toString(36).slice(2, 8));
+    // Each browser tab gets a unique sessionId for signal dedup
+    // (prevents filtering out own signals on multi-tab same account)
+    const [sessionId] = useState(() =>
+        (user?.id || 'anon') + '-' + Math.random().toString(36).slice(2, 8)
+    );
     const userId = user?.id || user?.username || 'unknown';
 
-    // ── State ──────────────────────────────────────────
+    // ── State ─────────────────────────────────────────────────────────────────
     const [phase, setPhase] = useState(paramCode ? 'joining' : 'lobby');
     const [meetingCode, setMeetingCode] = useState(paramCode || '');
     const [joinInput, setJoinInput] = useState('');
@@ -57,21 +52,24 @@ const VideoCall = ({ user }) => {
     const [error, setError] = useState('');
     const [remoteHasStream, setRemoteHasStream] = useState(false);
     const [showParticipants, setShowParticipants] = useState(false);
+    const [iceStatus, setIceStatus] = useState('');   // visual indicator
 
-    // ── Refs ───────────────────────────────────────────
+    // ── Refs ───────────────────────────────────────────────────────────────────
     const localVideoRef = useRef(null);
     const remoteVideoRef = useRef(null);
     const localStreamRef = useRef(null);
-    const peerConnectionRef = useRef(null);
-    const stompRef = useRef(null);
-    const timerRef = useRef(null);
-    const iceCandidateQueue = useRef([]);
+    const pcRef = useRef(null);    // RTCPeerConnection
+    const stompRef = useRef(null);    // STOMP client
+    const timerRef = useRef(null);    // call timer
+    const pollRef = useRef(null);    // participant polling
+    const iceQueue = useRef([]);      // ICE candidates queued before remoteDesc
+    const offerLock = useRef(false);   // prevent double-offer
 
-    // ── Helpers ────────────────────────────────────────
-    const showToast = (msg) => {
+    // ── Utils ─────────────────────────────────────────────────────────────────
+    const showToast = useCallback((msg) => {
         setToast(msg);
         setTimeout(() => setToast(''), 3000);
-    };
+    }, []);
 
     const formatTimer = (sec) => {
         const m = String(Math.floor(sec / 60)).padStart(2, '0');
@@ -86,53 +84,99 @@ const VideoCall = ({ user }) => {
         setTimeout(() => setCopied(false), 2000);
     };
 
-    // ── Get media stream ──────────────────────────────
+    // Safe play: pause first to avoid AbortError when srcObject is swapped
+    const safePlay = (el) => {
+        if (!el) return;
+        el.pause();
+        el.play().catch(e => { if (e.name !== 'AbortError') console.error('[cXat] play():', e); });
+    };
+
+    // ── Participants polling ───────────────────────────────────────────────────
+    const fetchParticipants = useCallback(async (code) => {
+        try {
+            const res = await axios.get(`${API}/meeting/participants/${code}`);
+            if (Array.isArray(res.data)) {
+                const active = res.data.filter(p => !p.leftAt);
+                const unique = active.filter(
+                    (p, i, arr) => arr.findIndex(x => x.userId === p.userId) === i
+                );
+                setParticipants(unique);
+            }
+        } catch (_) { }
+    }, []);
+
+    const startPolling = useCallback((code) => {
+        stopPolling();
+        fetchParticipants(code);
+        pollRef.current = setInterval(() => fetchParticipants(code), 5000);
+    }, [fetchParticipants]);
+
+    const stopPolling = () => {
+        if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    };
+
+    // ── Local media ───────────────────────────────────────────────────────────
     const startLocalStream = useCallback(async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
             localStreamRef.current = stream;
             if (localVideoRef.current) {
                 localVideoRef.current.srcObject = stream;
-                localVideoRef.current.play().catch(e => console.error('[cXat] Local video auto-play blocked', e));
+                safePlay(localVideoRef.current);
             }
-            console.log('[cXat] Local stream started');
+            console.log('[cXat] Local stream started, tracks:', stream.getTracks().map(t => t.kind));
             return stream;
         } catch (err) {
-            console.error('[cXat] Media error:', err);
-            setError('Camera/Microphone access denied. Please allow permissions and try again.');
+            console.error('[cXat] getUserMedia failed:', err);
+            setError('Camera/Microphone access denied. Please allow permissions and reload.');
             return null;
         }
     }, []);
 
-    // ── WebRTC peer connection ────────────────────────
-    const createPeerConnection = useCallback((stompClient, code) => {
+    // ── Build RTCPeerConnection ────────────────────────────────────────────────
+    const buildPC = useCallback((stompClient, code) => {
+        // Tear down existing connection
+        if (pcRef.current) {
+            pcRef.current.ontrack = null;
+            pcRef.current.onicecandidate = null;
+            pcRef.current.oniceconnectionstatechange = null;
+            pcRef.current.close();
+            pcRef.current = null;
+        }
+        iceQueue.current = [];
+        offerLock.current = false;
+
         const pc = new RTCPeerConnection(ICE_SERVERS);
-        peerConnectionRef.current = pc;
-        iceCandidateQueue.current = []; // Reset queue for new connection
+        pcRef.current = pc;
         console.log('[cXat] PeerConnection created');
 
-        // Add local tracks
+        // Add ALL local tracks (both video AND audio)
         if (localStreamRef.current) {
             localStreamRef.current.getTracks().forEach(track => {
                 pc.addTrack(track, localStreamRef.current);
+                console.log('[cXat] Added local track:', track.kind);
             });
-            console.log('[cXat] Local tracks added');
         }
 
-        // Handle remote stream
+        // Remote track → attach to video element
         pc.ontrack = (event) => {
-            console.log('[cXat] Remote track received!', event.streams);
-            if (remoteVideoRef.current && event.streams[0]) {
-                remoteVideoRef.current.srcObject = event.streams[0];
+            console.log('[cXat] ontrack:', event.track.kind, event.streams.length, 'streams');
+            if (!event.streams?.[0]) return;
+            const stream = event.streams[0];
+            if (remoteVideoRef.current) {
+                if (remoteVideoRef.current.srcObject?.id !== stream.id) {
+                    remoteVideoRef.current.srcObject = stream;
+                    console.log('[cXat] Remote srcObject set, audio tracks:',
+                        stream.getAudioTracks().length, 'video:', stream.getVideoTracks().length);
+                }
+                safePlay(remoteVideoRef.current);
                 setRemoteHasStream(true);
-                remoteVideoRef.current.play().catch(e => console.error('[cXat] Remote video auto-play blocked:', e));
             }
         };
 
-        // ICE candidates — send via signaling
+        // ICE candidate → send to peer
         pc.onicecandidate = (event) => {
             if (event.candidate && stompClient?.connected) {
-                console.log('[cXat] Sending ICE candidate');
                 stompClient.send('/app/signal', {}, JSON.stringify({
                     type: 'ice-candidate',
                     senderId: sessionId,
@@ -142,30 +186,41 @@ const VideoCall = ({ user }) => {
             }
         };
 
+        // ICE state monitor with auto-restart
         pc.oniceconnectionstatechange = () => {
-            console.log('[cXat] ICE state:', pc.iceConnectionState);
-            if (pc.iceConnectionState === 'connected') {
-                showToast('Peer connected!');
+            const state = pc.iceConnectionState;
+            console.log('[cXat] ICE state:', state);
+            setIceStatus(state);
+            if (state === 'connected' || state === 'completed') {
+                showToast('Connected! ✅');
+                offerLock.current = false;
             }
-            if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
-                showToast('Peer disconnected');
-                setRemoteHasStream(false);
+            if (state === 'failed') {
+                console.warn('[cXat] ICE failed → restartIce');
+                pc.restartIce();
+            }
+            if (state === 'disconnected') {
+                console.warn('[cXat] ICE disconnected → waiting 4s then restartIce');
+                setTimeout(() => {
+                    if (pcRef.current?.iceConnectionState === 'disconnected') {
+                        pcRef.current.restartIce();
+                    }
+                }, 4000);
             }
         };
 
         return pc;
-    }, [sessionId]);
+    }, [sessionId, showToast]);
 
-    // ── Drain queued ICE candidates ───────────────────
-    const drainIceCandidates = async (pc) => {
-        while (iceCandidateQueue.current.length > 0) {
-            const c = iceCandidateQueue.current.shift();
-            await pc.addIceCandidate(c);
-            console.log('[cXat] Applied queued ICE candidate');
+    // ── Drain queued ICE candidates after remoteDescription is set ────────────
+    const drainQueue = async (pc) => {
+        while (iceQueue.current.length > 0) {
+            const c = iceQueue.current.shift();
+            try { await pc.addIceCandidate(c); } catch (_) { }
         }
     };
 
-    // ── STOMP signaling ───────────────────────────────
+    // ── STOMP signaling connection ─────────────────────────────────────────────
     const connectSignaling = useCallback((code) => {
         return new Promise((resolve) => {
             const socket = new SockJS(`${API}/ws`);
@@ -176,162 +231,154 @@ const VideoCall = ({ user }) => {
             client.connect({}, () => {
                 console.log('[cXat] WebSocket connected');
 
-                // Subscribe to signaling topic
                 client.subscribe(`/topic/signal/${code}`, async (msg) => {
                     const signal = JSON.parse(msg.body);
+                    if (signal.senderId === sessionId) return;   // ignore own
 
-                    // Ignore own signals (using unique session ID)
-                    if (signal.senderId === sessionId) return;
-
-                    const pc = peerConnectionRef.current;
+                    const pc = pcRef.current;
                     if (!pc) return;
 
                     try {
+                        // ── OFFER ─────────────────────────
                         if (signal.type === 'offer') {
-                            console.log('[cXat] Received offer');
+                            if (pc.signalingState !== 'stable') {
+                                console.warn('[cXat] Ignoring offer — state:', pc.signalingState);
+                                return;
+                            }
+                            console.log('[cXat] Received offer → answering');
                             await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(signal.data)));
-                            await drainIceCandidates(pc);
+                            await drainQueue(pc);
                             const answer = await pc.createAnswer();
                             await pc.setLocalDescription(answer);
-                            console.log('[cXat] Sending answer');
                             client.send('/app/signal', {}, JSON.stringify({
                                 type: 'answer',
                                 senderId: sessionId,
                                 meetingCode: code,
                                 data: JSON.stringify(answer),
                             }));
+                            console.log('[cXat] Answer sent');
+
+                            // ── ANSWER ────────────────────────
                         } else if (signal.type === 'answer') {
+                            if (pc.signalingState !== 'have-local-offer') {
+                                console.warn('[cXat] Ignoring answer — state:', pc.signalingState);
+                                return;
+                            }
                             console.log('[cXat] Received answer');
                             await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(signal.data)));
-                            await drainIceCandidates(pc);
+                            await drainQueue(pc);
+
+                            // ── ICE CANDIDATE ─────────────────
                         } else if (signal.type === 'ice-candidate') {
                             const candidate = new RTCIceCandidate(JSON.parse(signal.data));
                             if (pc.remoteDescription) {
-                                console.log('[cXat] Adding ICE candidate');
                                 await pc.addIceCandidate(candidate);
                             } else {
-                                console.log('[cXat] Queuing ICE candidate (no remote desc yet)');
-                                iceCandidateQueue.current.push(candidate);
+                                iceQueue.current.push(candidate);
                             }
+
+                            // ── USER JOINED ───────────────────
                         } else if (signal.type === 'user-joined') {
-                            console.log('[cXat] User joined, creating fresh offer...');
+                            if (offerLock.current) {
+                                console.warn('[cXat] Offer already in progress, skipping');
+                                return;
+                            }
+                            offerLock.current = true;
+                            console.log('[cXat] user-joined → fresh PC + offer');
                             showToast('A participant joined!');
 
-                            // Recreate PC for a clean slate (fixes stale ICE state dropped connections)
-                            let currentPc = peerConnectionRef.current;
-                            if (currentPc) {
-                                currentPc.close();
-                            }
-                            currentPc = createPeerConnection(client, code);
+                            // Fresh PC so ICE state is clean
+                            const freshPc = buildPC(client, code);
 
-                            const offer = await currentPc.createOffer();
-                            await currentPc.setLocalDescription(offer);
-                            console.log('[cXat] Sending offer');
+                            // Small delay to ensure both sides are subscribed
+                            await new Promise(r => setTimeout(r, 300));
+
+                            const offer = await freshPc.createOffer();
+                            await freshPc.setLocalDescription(offer);
                             client.send('/app/signal', {}, JSON.stringify({
                                 type: 'offer',
                                 senderId: sessionId,
                                 meetingCode: code,
                                 data: JSON.stringify(offer),
                             }));
+                            console.log('[cXat] Offer sent to joining peer');
                             fetchParticipants(code);
                         }
                     } catch (err) {
-                        console.error('[cXat] Signal handling error:', err);
+                        console.error('[cXat] Signal handler error:', err);
+                        offerLock.current = false;
                     }
                 });
 
-                console.log('[cXat] Subscribed to /topic/signal/' + code);
+                console.log('[cXat] Subscribed /topic/signal/' + code);
                 resolve(client);
             }, (err) => {
-                console.error('[cXat] STOMP error:', err);
-                setError('Failed to connect to signaling server.');
+                console.error('[cXat] STOMP connect error:', err);
+                setError('Signaling server connection failed.');
                 resolve(null);
             });
         });
-    }, [sessionId]);
+    }, [sessionId, buildPC, showToast, fetchParticipants]);
 
-    const fetchParticipants = async (code) => {
-        try {
-            const res = await axios.get(`${API}/meeting/participants/${code}`);
-            if (Array.isArray(res.data)) {
-                const active = res.data.filter(p => !p.leftAt);
-                const unique = active.filter((p, idx, arr) => arr.findIndex(x => x.userId === p.userId) === idx);
-                setParticipants(unique);
-            }
-        } catch (e) { /* ignore */ }
-    };
-
-    // ── Create Meeting ────────────────────────────────
+    // ── Create meeting ─────────────────────────────────────────────────────────
     const handleCreate = async () => {
         setError('');
         const stream = await startLocalStream();
         if (!stream) return;
-
         try {
             const res = await axios.post(`${API}/meeting/create?hostId=${userId}`);
             const code = res.data.meetingCode;
             setMeetingCode(code);
-
             await axios.post(`${API}/meeting/join?meetingCode=${code}&userId=${userId}`);
-
             const stompClient = await connectSignaling(code);
-            createPeerConnection(stompClient, code);
-
+            buildPC(stompClient, code);
             setPhase('incall');
+            startPolling(code);
             showToast('Meeting created! Share the code.');
-            fetchParticipants(code);
-
             timerRef.current = setInterval(() => setCallSeconds(s => s + 1), 1000);
             navigate(`/meeting/${code}`, { replace: true });
         } catch (err) {
-            console.error('[cXat] Create meeting error:', err);
-            setError('Failed to create meeting. Is the server running?');
+            console.error('[cXat] Create error:', err);
+            setError('Failed to create meeting. Is the backend running?');
         }
     };
 
-    // ── Join Meeting ──────────────────────────────────
+    // ── Join meeting ───────────────────────────────────────────────────────────
     const handleJoin = async (code) => {
         setError('');
         const meetCode = code || joinInput.trim();
-        if (!meetCode) {
-            setError('Please enter a meeting code.');
-            return;
-        }
+        if (!meetCode) { setError('Please enter a meeting code.'); return; }
 
         const stream = await startLocalStream();
         if (!stream) return;
 
         try {
-            const res = await axios.post(`${API}/meeting/join?meetingCode=${meetCode}&userId=${userId}`);
-            if (res.data === 'Meeting not found') {
-                setError('Meeting not found. Check the code and try again.');
-                return;
-            }
-            if (res.data === 'Meeting ended') {
-                setError('This meeting has already ended.');
-                return;
-            }
+            const res = await axios.post(
+                `${API}/meeting/join?meetingCode=${meetCode}&userId=${userId}`
+            );
+            if (res.data === 'Meeting not found') { setError('Meeting not found.'); return; }
+            if (res.data === 'Meeting ended') { setError('This meeting has already ended.'); return; }
 
             setMeetingCode(meetCode);
-
             const stompClient = await connectSignaling(meetCode);
-            createPeerConnection(stompClient, meetCode);
+            buildPC(stompClient, meetCode);
 
-            // Notify others that we joined
+            // Wait a tick so the subscription is active before host receives user-joined
+            await new Promise(r => setTimeout(r, 200));
+
             if (stompClient?.connected) {
-                console.log('[cXat] Sending user-joined signal');
                 stompClient.send('/app/signal', {}, JSON.stringify({
                     type: 'user-joined',
                     senderId: sessionId,
                     meetingCode: meetCode,
                     data: '',
                 }));
+                console.log('[cXat] user-joined signal sent');
             }
 
             setPhase('incall');
+            startPolling(meetCode);
             showToast('Joined meeting!');
-            fetchParticipants(meetCode);
-
             timerRef.current = setInterval(() => setCallSeconds(s => s + 1), 1000);
             navigate(`/meeting/${meetCode}`, { replace: true });
         } catch (err) {
@@ -340,97 +387,78 @@ const VideoCall = ({ user }) => {
         }
     };
 
-    // ── Auto-join if URL has meeting code ─────────────
+    // ── Auto-join from URL ─────────────────────────────────────────────────────
     useEffect(() => {
-        if (paramCode && phase === 'joining') {
-            handleJoin(paramCode);
-        }
+        if (paramCode && phase === 'joining') handleJoin(paramCode);
     }, [paramCode]);
 
-    // ── Leave / End ───────────────────────────────────
+    // ── End call ───────────────────────────────────────────────────────────────
     const handleEndCall = async () => {
-        if (timerRef.current) {
-            clearInterval(timerRef.current);
-            timerRef.current = null;
-        }
-
+        clearInterval(timerRef.current); timerRef.current = null;
+        stopPolling();
         localStreamRef.current?.getTracks().forEach(t => t.stop());
-        peerConnectionRef.current?.close();
-        peerConnectionRef.current = null;
+        if (pcRef.current) {
+            pcRef.current.ontrack = null;
+            pcRef.current.onicecandidate = null;
+            pcRef.current.oniceconnectionstatechange = null;
+            pcRef.current.close();
+            pcRef.current = null;
+        }
         if (stompRef.current?.connected) stompRef.current.disconnect();
-
         try {
             await axios.post(`${API}/meeting/leave?meetingCode=${meetingCode}&userId=${userId}`);
-        } catch (e) { /* ignore */ }
-
+        } catch (_) { }
         setRemoteHasStream(false);
         setPhase('ended');
     };
 
-    // ── Media toggles ─────────────────────────────────
+    // ── Mic / cam toggles ─────────────────────────────────────────────────────
     const toggleMic = () => {
         const tracks = localStreamRef.current?.getAudioTracks();
-        if (tracks?.length) {
-            tracks[0].enabled = !tracks[0].enabled;
-            setIsMuted(!tracks[0].enabled);
-        }
+        if (tracks?.length) { tracks[0].enabled = !tracks[0].enabled; setIsMuted(!tracks[0].enabled); }
     };
-
     const toggleCam = () => {
         const tracks = localStreamRef.current?.getVideoTracks();
-        if (tracks?.length) {
-            tracks[0].enabled = !tracks[0].enabled;
-            setIsCamOff(!tracks[0].enabled);
-        }
+        if (tracks?.length) { tracks[0].enabled = !tracks[0].enabled; setIsCamOff(!tracks[0].enabled); }
     };
 
-    // ── Cleanup on unmount ────────────────────────────
+    // ── Cleanup on component unmount ──────────────────────────────────────────
     useEffect(() => {
         return () => {
-            localStreamRef.current?.getTracks().forEach(t => t.stop());
-            peerConnectionRef.current?.close();
-            if (stompRef.current?.connected) stompRef.current.disconnect();
             clearInterval(timerRef.current);
+            stopPolling();
+            localStreamRef.current?.getTracks().forEach(t => t.stop());
+            pcRef.current?.close();
+            if (stompRef.current?.connected) stompRef.current.disconnect();
         };
     }, []);
 
+    // ── Re-attach local stream when phase becomes incall ──────────────────────
     useEffect(() => {
         if (phase === 'incall' && localStreamRef.current && localVideoRef.current) {
             localVideoRef.current.srcObject = localStreamRef.current;
-            localVideoRef.current.play().catch(e => console.error('[cXat] Local PIP play error', e));
+            safePlay(localVideoRef.current);
         }
     }, [phase]);
 
-    // ══════════════════════════════════════════════════
+    // ══════════════════════════════════════════════════════════════════════════
     // RENDER
-    // ══════════════════════════════════════════════════
+    // ══════════════════════════════════════════════════════════════════════════
 
-    // ── Call ended screen ─────────────────────────────
+    // ── Call ended ────────────────────────────────────────────────────────────
     if (phase === 'ended') {
         return (
             <div className="vc-page">
-                <div className="vc-ambient">
-                    <motion.div
-                        animate={{ scale: [1, 1.2, 1], opacity: [0.2, 0.4, 0.2] }}
-                        transition={{ duration: 15, repeat: Infinity, ease: 'easeInOut' }}
-                        style={{ position: 'absolute', top: '-10%', left: '-10%', width: '50vw', height: '50vw', background: 'radial-gradient(circle, rgba(248,81,73,0.12) 0%, transparent 60%)', borderRadius: '50%' }}
-                    />
-                </div>
+                <div className="vc-ambient" />
                 <div className="vc-lobby">
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        className="vc-lobby-card"
-                    >
-                        <div className="vc-lobby-icon" style={{ background: 'linear-gradient(135deg, rgba(248,81,73,0.15), rgba(248,81,73,0.05))', borderColor: 'rgba(248,81,73,0.25)' }}>
+                    <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="vc-lobby-card">
+                        <div className="vc-lobby-icon" style={{ background: 'rgba(248,81,73,0.1)', borderColor: 'rgba(248,81,73,0.25)' }}>
                             <PhoneOff size={36} color="var(--error)" />
                         </div>
-                        <h2 className="vc-lobby-title" style={{ background: 'linear-gradient(135deg, var(--error), var(--accent-secondary))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>
+                        <h2 className="vc-lobby-title" style={{ background: 'linear-gradient(135deg,var(--error),#ff9999)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>
                             Call Ended
                         </h2>
-                        <p className="vc-lobby-subtitle">
-                            Duration: {formatTimer(callSeconds)}
-                        </p>
+                        <p className="vc-lobby-subtitle">Duration: {formatTimer(callSeconds)}</p>
                         <button className="vc-btn-create" onClick={() => { setPhase('lobby'); setCallSeconds(0); setMeetingCode(''); }}>
                             <Zap size={18} /> NEW MEETING
                         </button>
@@ -444,52 +472,23 @@ const VideoCall = ({ user }) => {
         );
     }
 
-    // ── Pre-join lobby ────────────────────────────────
+    // ── Pre-join lobby ─────────────────────────────────────────────────────────
     if (phase === 'lobby' || phase === 'joining') {
         return (
             <div className="vc-page">
-                <div className="vc-ambient">
-                    <motion.div
-                        animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.5, 0.3], x: ['0%', '5%', '0%'], y: ['0%', '5%', '0%'] }}
-                        transition={{ duration: 15, repeat: Infinity, ease: 'easeInOut' }}
-                        style={{ position: 'absolute', top: '-10%', left: '-10%', width: '50vw', height: '50vw', background: 'radial-gradient(circle, rgba(63,185,80,0.15) 0%, transparent 60%)', borderRadius: '50%' }}
-                    />
-                    <motion.div
-                        animate={{ scale: [1, 1.3, 1], opacity: [0.2, 0.4, 0.2] }}
-                        transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut', delay: 2 }}
-                        style={{ position: 'absolute', bottom: '-20%', right: '-10%', width: '60vw', height: '60vw', background: 'radial-gradient(circle, rgba(121,192,255,0.12) 0%, transparent 60%)', borderRadius: '50%' }}
-                    />
-                </div>
-
+                <div className="vc-ambient" />
                 <div className="vc-lobby">
-                    <motion.div
-                        initial={{ opacity: 0, y: 30 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.5 }}
-                        className="vc-lobby-card"
-                    >
-                        <div className="vc-lobby-icon">
-                            <Video size={36} />
-                        </div>
+                    <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} className="vc-lobby-card">
+                        <div className="vc-lobby-icon"><Video size={36} /></div>
                         <h2 className="vc-lobby-title">Video Call</h2>
                         <p className="vc-lobby-subtitle">Start a new meeting or join an existing one.</p>
-
                         {error && (
-                            <motion.div
-                                initial={{ opacity: 0, y: -10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                style={{ background: 'rgba(248,81,73,0.1)', border: '1px solid rgba(248,81,73,0.3)', borderRadius: '12px', padding: '12px', color: 'var(--error)', fontSize: '0.85rem', fontWeight: '600', marginBottom: '1rem' }}
-                            >
+                            <div style={{ background: 'rgba(248,81,73,0.1)', border: '1px solid rgba(248,81,73,0.3)', borderRadius: 12, padding: 12, color: 'var(--error)', fontSize: '0.85rem', fontWeight: 600, marginBottom: '1rem' }}>
                                 {error}
-                            </motion.div>
+                            </div>
                         )}
-
-                        <button className="vc-btn-create" onClick={handleCreate}>
-                            <Zap size={18} /> CREATE MEETING
-                        </button>
-
+                        <button className="vc-btn-create" onClick={handleCreate}><Zap size={18} /> CREATE MEETING</button>
                         <div className="vc-lobby-divider">OR</div>
-
                         <input
                             className="vc-lobby-input"
                             placeholder="Enter meeting code"
@@ -497,71 +496,60 @@ const VideoCall = ({ user }) => {
                             onChange={(e) => setJoinInput(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
                         />
-                        <button className="vc-btn-join" onClick={() => handleJoin()}>
-                            <MonitorUp size={18} /> JOIN MEETING
-                        </button>
+                        <button className="vc-btn-join" onClick={() => handleJoin()}><MonitorUp size={18} /> JOIN MEETING</button>
                     </motion.div>
                 </div>
             </div>
         );
     }
 
-    // ── In-call view ──────────────────────────────────
+    // ── In-call ────────────────────────────────────────────────────────────────
     return (
         <div className="vc-page">
-            <div className="vc-ambient">
-                <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at 50% 50%, rgba(13,17,23,0) 0%, var(--bg-base) 100%)' }} />
-            </div>
+            <div className="vc-ambient" />
 
             {/* Toast */}
             <AnimatePresence>
                 {toast && (
-                    <motion.div
-                        initial={{ opacity: 0, y: -20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -20 }}
-                        className="vc-toast"
-                    >
+                    <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="vc-toast">
                         <Check size={16} /> {toast}
                     </motion.div>
                 )}
             </AnimatePresence>
 
-            {/* Participants Panel */}
+            {/* Participants panel */}
             <AnimatePresence>
                 {showParticipants && (
                     <motion.div
-                        initial={{ opacity: 0, x: 300 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: 300 }}
-                        style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: '280px', background: 'rgba(22,27,34,0.95)', backdropFilter: 'blur(12px)', borderLeft: '1px solid var(--glass-border)', zIndex: 100, padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}
+                        initial={{ opacity: 0, x: 300 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 300 }}
+                        style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 280, background: 'rgba(22,27,34,0.97)', backdropFilter: 'blur(12px)', borderLeft: '1px solid var(--glass-border)', zIndex: 100, padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}
                     >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#fff' }}>
-                                <Users size={16} style={{ marginRight: '8px', verticalAlign: 'middle' }} />
+                                <Users size={16} style={{ marginRight: 8, verticalAlign: 'middle' }} />
                                 Participants ({participants.length})
                             </h3>
                             <button onClick={() => setShowParticipants(false)} style={{ background: 'none', border: 'none', color: '#8b949e', cursor: 'pointer' }}>
                                 <X size={18} />
                             </button>
                         </div>
-                        {participants
-                            .filter((p, idx, arr) => arr.findIndex(x => x.userId === p.userId) === idx)
-                            .map((p, i) => {
-                                const isMe = p.userId === userId;
-                                const displayName = isMe ? (user?.username || p.userId) : p.userId;
-                                return (
-                                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', background: 'rgba(255,255,255,0.04)', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                                        <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: isMe ? 'linear-gradient(135deg, #3fb950, #79c0ff)' : 'linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700, color: '#fff' }}>
-                                            {displayName.charAt(0).toUpperCase()}
-                                        </div>
-                                        <div>
-                                            <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff' }}>{displayName} {isMe && <span style={{ color: '#8b949e', fontWeight: 400 }}>(You)</span>}</div>
-                                            <div style={{ fontSize: '0.7rem', color: '#3fb950' }}>● Active</div>
-                                        </div>
+                        {participants.map((p, i) => {
+                            const isMe = p.userId === userId;
+                            const display = isMe ? (user?.username || p.userId) : p.userId;
+                            return (
+                                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'rgba(255,255,255,0.04)', borderRadius: 10 }}>
+                                    <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg,var(--accent-primary),var(--accent-secondary))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700, color: '#fff' }}>
+                                        {display.charAt(0).toUpperCase()}
                                     </div>
-                                );
-                            })}
+                                    <div>
+                                        <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff' }}>
+                                            {display} {isMe && <span style={{ color: '#8b949e', fontWeight: 400 }}>(You)</span>}
+                                        </div>
+                                        <div style={{ fontSize: '0.7rem', color: '#3fb950' }}>● Active</div>
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </motion.div>
                 )}
             </AnimatePresence>
@@ -569,112 +557,65 @@ const VideoCall = ({ user }) => {
             {/* Header */}
             <div className="vc-header">
                 <div className="vc-header-left">
-                    <button className="vc-back-btn" onClick={handleEndCall}>
-                        <ChevronLeft size={20} />
-                    </button>
+                    <button className="vc-back-btn" onClick={handleEndCall}><ChevronLeft size={20} /></button>
                     <div className="vc-meeting-code">
                         <span>{meetingCode}</span>
-                        <button className="vc-copy-btn" onClick={copyCode}>
-                            {copied ? <Check size={14} /> : <Copy size={14} />}
-                        </button>
+                        <button className="vc-copy-btn" onClick={copyCode}>{copied ? <Check size={14} /> : <Copy size={14} />}</button>
                     </div>
                 </div>
                 <div className="vc-header-right">
                     <button
-                        className="vc-participants-badge"
-                        onClick={() => { setShowParticipants(!showParticipants); fetchParticipants(meetingCode); }}
-                        style={{ cursor: 'pointer', background: 'rgba(255,255,255,0.06)', border: '1px solid var(--glass-border)', borderRadius: '20px', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '6px', color: '#fff', fontSize: '0.85rem', fontWeight: 600 }}
+                        onClick={() => { setShowParticipants(!showParticipants); }}
+                        style={{ cursor: 'pointer', background: 'rgba(255,255,255,0.06)', border: '1px solid var(--glass-border)', borderRadius: 20, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 6, color: '#fff', fontSize: '0.85rem', fontWeight: 600 }}
                     >
                         <Users size={16} /> {participants.length}
                     </button>
                     <div className="vc-timer">
-                        <div className="vc-timer-dot" />
+                        <div className="vc-timer-dot" style={{ background: iceStatus === 'connected' || iceStatus === 'completed' ? '#3fb950' : 'var(--error)' }} />
                         {formatTimer(callSeconds)}
                     </div>
                 </div>
             </div>
 
-            {/* Videos */}
+            {/* Video area */}
             <div className="vc-videos">
-                {/* Remote video */}
-                <div style={{ position: 'relative', width: '100%', height: '100%', flex: 1, display: remoteHasStream ? 'flex' : 'none', alignItems: 'center', justifyContent: 'center' }}>
-                    <video
-                        ref={remoteVideoRef}
-                        autoPlay
-                        playsInline
-                        className="vc-remote-video"
-                    />
-                    <div className="vc-local-label" style={{ bottom: 16, left: 16, fontSize: '0.85rem', padding: '5px 14px' }}>
-                        {participants.find(p => p.userId !== userId)?.userId || 'Peer'}
-                    </div>
-                </div>
-
-                {/* Placeholder when no remote stream */}
-                {!remoteHasStream && (
-                    <div className="vc-remote-placeholder">
-                        <div className="vc-remote-placeholder-icon">
-                            <Users size={42} />
+                {remoteHasStream ? (
+                    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+                        <video ref={remoteVideoRef} autoPlay playsInline className="vc-remote-video" />
+                        <div className="vc-local-label" style={{ bottom: 16, left: 16, fontSize: '0.85rem', padding: '5px 14px' }}>
+                            {participants.find(p => p.userId !== userId)?.userId || 'Peer'}
                         </div>
+                    </div>
+                ) : (
+                    <div className="vc-remote-placeholder">
+                        <div className="vc-remote-placeholder-icon"><Users size={42} /></div>
                         <p style={{ fontWeight: 600, fontSize: '1.1rem' }}>Waiting for others to join...</p>
-                        <p style={{ fontSize: '0.85rem', opacity: 0.6 }}>Share the meeting code: <strong style={{ color: 'var(--accent-tertiary)', letterSpacing: '2px' }}>{meetingCode}</strong></p>
+                        <p style={{ fontSize: '0.85rem', opacity: 0.6 }}>
+                            Code: <strong style={{ color: 'var(--accent-tertiary)', letterSpacing: 2 }}>{meetingCode}</strong>
+                        </p>
                     </div>
                 )}
 
                 {/* Local PiP */}
-                <motion.div
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: 0.3 }}
-                    className="vc-local-wrapper"
-                >
-                    <video
-                        ref={localVideoRef}
-                        autoPlay
-                        muted
-                        playsInline
-                        className="vc-local-video"
-                    />
+                <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.3 }} className="vc-local-wrapper">
+                    <video ref={localVideoRef} autoPlay muted playsInline className="vc-local-video" />
                     <div className="vc-local-label">{user?.username || 'You'}</div>
                 </motion.div>
             </div>
 
             {/* Controls */}
             <div className="vc-controls">
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.2 }}
-                    className="vc-controls-bar"
-                >
-                    <button
-                        className={`vc-ctrl-btn ${isMuted ? 'muted' : 'active'}`}
-                        onClick={toggleMic}
-                        title={isMuted ? 'Unmute' : 'Mute'}
-                    >
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="vc-controls-bar">
+                    <button className={`vc-ctrl-btn ${isMuted ? 'muted' : 'active'}`} onClick={toggleMic} title={isMuted ? 'Unmute' : 'Mute'}>
                         {isMuted ? <MicOff size={22} /> : <Mic size={22} />}
                     </button>
-
-                    <button
-                        className={`vc-ctrl-btn ${isCamOff ? 'muted' : 'active'}`}
-                        onClick={toggleCam}
-                        title={isCamOff ? 'Turn camera on' : 'Turn camera off'}
-                    >
+                    <button className={`vc-ctrl-btn ${isCamOff ? 'muted' : 'active'}`} onClick={toggleCam} title={isCamOff ? 'Camera on' : 'Camera off'}>
                         {isCamOff ? <VideoOff size={22} /> : <Video size={22} />}
                     </button>
-
-                    <button
-                        className="vc-ctrl-btn end-call"
-                        onClick={handleEndCall}
-                        title="End call"
-                    >
+                    <button className="vc-ctrl-btn end-call" onClick={handleEndCall} title="End call">
                         <PhoneOff size={22} />
                     </button>
-
-                    <button
-                        className="vc-ctrl-btn active"
-                        onClick={copyCode}
-                        title="Copy meeting code"
-                    >
+                    <button className="vc-ctrl-btn active" onClick={copyCode} title="Copy code">
                         {copied ? <Check size={22} /> : <Copy size={22} />}
                     </button>
                 </motion.div>
