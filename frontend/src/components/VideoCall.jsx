@@ -81,6 +81,7 @@ const VideoCall = ({ user }) => {
     const pollRef = useRef(null);
     const iceQueue = useRef([]);
     const iceConfigRef = useRef(null);
+    const remoteStreamRef = useRef(null);
 
     // Helpers
     const showToast = useCallback((m) => { setToast(m); setTimeout(() => setToast(''), 3000); }, []);
@@ -164,30 +165,29 @@ const VideoCall = ({ user }) => {
         // Remote track (using native streams to ensure reliable playback)
         pc.ontrack = (ev) => {
             console.log('[cXat] remote track:', ev.track.kind, 'enabled:', ev.track.enabled);
-            if (!ev.streams || !ev.streams[0]) return;
 
-            const remoteStream = ev.streams[0];
+            // Some browsers fire ontrack with empty ev.streams; keep a stable stream anyway.
+            let remoteStream = ev.streams?.[0] || remoteStreamRef.current;
+            if (!remoteStream) remoteStream = new MediaStream();
+
+            const hasTrack = remoteStream.getTracks().some(t => t.id === ev.track.id);
+            if (!hasTrack) remoteStream.addTrack(ev.track);
+
+            remoteStreamRef.current = remoteStream;
             console.log('[cXat] remote stream tracks:', remoteStream.getTracks().map(t => `${t.kind}:${t.enabled}`).join(', '));
 
+            // Render the remote <video> first; stream attach can happen in follow-up effect.
+            setRemoteHasStream(true);
+
             if (remoteVideoRef.current) {
-                // Direct assignment as requested for stability
                 if (remoteVideoRef.current.srcObject !== remoteStream) {
                     remoteVideoRef.current.srcObject = remoteStream;
                 }
-                remoteVideoRef.current.autoplay = true;
-                remoteVideoRef.current.playsInline = true;
-                remoteVideoRef.current.muted = false;
-
-                remoteVideoRef.current.play().catch(e => {
-                    if (e.name !== 'AbortError') console.error('[cXat] remote stream play error:', e);
-                });
-
-                setRemoteHasStream(true);
+                safePlay(remoteVideoRef.current, true);
             }
         };
 
         // ICE candidate → send via STOMP
-        let iceRestartCount = 0;
         pc.onicecandidate = (ev) => {
             if (!stompClient?.connected) return;
 
@@ -221,6 +221,7 @@ const VideoCall = ({ user }) => {
             if (s === 'disconnected') {
                 console.warn('[cXat] ICE disconnected — peer may have dropped');
                 setRemoteHasStream(false);
+                remoteStreamRef.current = null;
                 if (remoteVideoRef.current) {
                     remoteVideoRef.current.srcObject = null;
                 }
@@ -428,6 +429,8 @@ const VideoCall = ({ user }) => {
         if (stompRef.current?.connected) stompRef.current.disconnect();
         try { await axios.post(`${API}/meeting/leave?meetingCode=${meetingCode}&userId=${userId}`); } catch (_) { }
         setRemoteHasStream(false);
+        remoteStreamRef.current = null;
+        if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
         setPhase('ended');
     };
 
@@ -438,6 +441,8 @@ const VideoCall = ({ user }) => {
         clearInterval(timerRef.current); stopPolling();
         localStreamRef.current?.getTracks().forEach(t => t.stop());
         pcRef.current?.close();
+        remoteStreamRef.current = null;
+        if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
         if (stompRef.current?.connected) stompRef.current.disconnect();
     }, []);
 
@@ -447,6 +452,15 @@ const VideoCall = ({ user }) => {
             safePlay(localVideoRef.current);
         }
     }, [phase]);
+
+    useEffect(() => {
+        if (!remoteHasStream || !remoteVideoRef.current || !remoteStreamRef.current) return;
+
+        if (remoteVideoRef.current.srcObject !== remoteStreamRef.current) {
+            remoteVideoRef.current.srcObject = remoteStreamRef.current;
+        }
+        safePlay(remoteVideoRef.current, true);
+    }, [remoteHasStream]);
 
     // ══════════════════════════════════════════════ RENDER ═══════════
 
