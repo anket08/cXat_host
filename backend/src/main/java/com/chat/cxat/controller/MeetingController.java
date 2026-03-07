@@ -55,9 +55,10 @@ public class MeetingController {
     @PostMapping("/join")
     public String joinMeeting(
             @RequestParam String meetingCode,
-            @RequestParam String userId) {
+            @RequestParam String userId,
+            @RequestParam(required = false) String username) {
 
-        return meetingService.joinMeeting(meetingCode, userId);
+        return meetingService.joinMeeting(meetingCode, userId, username);
     }
 
     /*

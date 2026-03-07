@@ -47,6 +47,14 @@ async function fetchIceServers() {
  *   Done. No "user-joined" signal. No PC recreation. No race conditions.
  * ═══════════════════════════════════════════════════════════════════
  */
+
+const formatName = (p) => {
+    if (!p) return 'Peer';
+    if (p.username && p.username !== 'undefined' && p.username.trim() !== '') return p.username;
+    if (typeof p.userId === 'string' && p.userId.length === 24) return `Guest-${p.userId.slice(-4)}`;
+    return p.userId || 'Peer';
+};
+
 const VideoCall = ({ user }) => {
     const { meetingCode: paramCode } = useParams();
     const navigate = useNavigate();
@@ -96,7 +104,6 @@ const VideoCall = ({ user }) => {
             el.controls = false;
         }
         el.setAttribute('playsinline', 'true');
-        el.pause();
         el.play().catch(e => { if (e.name !== 'AbortError') console.error('[cXat] play:', e); });
     };
 
@@ -166,22 +173,30 @@ const VideoCall = ({ user }) => {
         pc.ontrack = (ev) => {
             console.log('[cXat] remote track:', ev.track.kind, 'enabled:', ev.track.enabled);
 
-            // Some browsers fire ontrack with empty ev.streams; keep a stable stream anyway.
-            let remoteStream = ev.streams?.[0] || remoteStreamRef.current;
-            if (!remoteStream) remoteStream = new MediaStream();
+            if (!remoteStreamRef.current) {
+                remoteStreamRef.current = new MediaStream();
+            }
 
-            const hasTrack = remoteStream.getTracks().some(t => t.id === ev.track.id);
-            if (!hasTrack) remoteStream.addTrack(ev.track);
+            if (ev.streams && ev.streams[0]) {
+                ev.streams[0].getTracks().forEach(t => {
+                    if (!remoteStreamRef.current.getTracks().some(existing => existing.id === t.id)) {
+                        remoteStreamRef.current.addTrack(t);
+                    }
+                });
+            } else {
+                if (!remoteStreamRef.current.getTracks().some(existing => existing.id === ev.track.id)) {
+                    remoteStreamRef.current.addTrack(ev.track);
+                }
+            }
 
-            remoteStreamRef.current = remoteStream;
-            console.log('[cXat] remote stream tracks:', remoteStream.getTracks().map(t => `${t.kind}:${t.enabled}`).join(', '));
+            console.log('[cXat] remote stream tracks:', remoteStreamRef.current.getTracks().map(t => `${t.kind}:${t.enabled}`).join(', '));
 
             // Render the remote <video> first; stream attach can happen in follow-up effect.
             setRemoteHasStream(true);
 
             if (remoteVideoRef.current) {
-                if (remoteVideoRef.current.srcObject !== remoteStream) {
-                    remoteVideoRef.current.srcObject = remoteStream;
+                if (remoteVideoRef.current.srcObject !== remoteStreamRef.current) {
+                    remoteVideoRef.current.srcObject = remoteStreamRef.current;
                 }
                 safePlay(remoteVideoRef.current, true);
             }
@@ -358,7 +373,8 @@ const VideoCall = ({ user }) => {
             const r = await axios.post(`${API}/meeting/create?hostId=${userId}`);
             const code = r.data.meetingCode;
             setMeetingCode(code);
-            await axios.post(`${API}/meeting/join?meetingCode=${code}&userId=${userId}`);
+            const uname = encodeURIComponent(user?.username || 'Guest');
+            await axios.post(`${API}/meeting/join?meetingCode=${code}&userId=${userId}&username=${uname}`);
             const stomp = await connectSignaling(code);
             await buildPC(stomp, code);
             // HOST just waits — JOINER will send the offer
@@ -381,7 +397,8 @@ const VideoCall = ({ user }) => {
         const stream = await startLocalStream();
         if (!stream) return;
         try {
-            const r = await axios.post(`${API}/meeting/join?meetingCode=${c}&userId=${userId}`);
+            const uname = encodeURIComponent(user?.username || 'Guest');
+            const r = await axios.post(`${API}/meeting/join?meetingCode=${c}&userId=${userId}&username=${uname}`);
             if (r.data === 'Meeting not found') { setError('Meeting not found.'); return; }
             if (r.data === 'Meeting ended') { setError('Meeting ended.'); return; }
 
@@ -515,7 +532,7 @@ const VideoCall = ({ user }) => {
                         </div>
                         {participants.map((p, i) => {
                             const me = p.userId === userId;
-                            const name = me ? (user?.username || p.userId) : p.userId;
+                            const name = me ? (user?.username || p.userId) : formatName(p);
                             return (
                                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'rgba(255,255,255,0.04)', borderRadius: 10 }}>
                                     <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg,var(--accent-primary),var(--accent-secondary))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700, color: '#fff' }}>{name.charAt(0).toUpperCase()}</div>
@@ -545,7 +562,7 @@ const VideoCall = ({ user }) => {
                 {remoteHasStream ? (
                     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
                         <video ref={remoteVideoRef} autoPlay playsInline className="vc-remote-video" />
-                        <div className="vc-local-label" style={{ bottom: 16, left: 16, fontSize: '0.85rem', padding: '5px 14px' }}>{participants.find(p => p.userId !== userId)?.userId || 'Peer'}</div>
+                        <div className="vc-local-label" style={{ bottom: 16, left: 16, fontSize: '0.85rem', padding: '5px 14px' }}>{formatName(participants.find(p => p.userId !== userId))}</div>
                     </div>
                 ) : (
                     <div className="vc-remote-placeholder">

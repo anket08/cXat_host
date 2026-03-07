@@ -75,7 +75,7 @@ public class MeetingService {
      * =========================
      */
 
-    public String joinMeeting(String meetingCode, String userId) {
+    public String joinMeeting(String meetingCode, String userId, String username) {
 
         Meeting meeting = meetingRepository.findByMeetingCode(meetingCode);
 
@@ -93,6 +93,8 @@ public class MeetingService {
             if (existing.getLeftAt() != null) {
                 existing.setLeftAt(null);
                 existing.setJoinedAt(java.time.LocalDateTime.now(java.time.ZoneOffset.UTC).toString());
+                if (username != null)
+                    existing.setUsername(username);
                 participantRepository.save(existing);
             }
             return "Already joined";
@@ -103,6 +105,10 @@ public class MeetingService {
         participant.setMeetingCode(meetingCode);
 
         participant.setUserId(userId);
+
+        if (username != null) {
+            participant.setUsername(username);
+        }
 
         // Always store as ISO UTC string for consistent parsing
         participant.setJoinedAt(
