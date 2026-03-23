@@ -2,7 +2,7 @@
 
 Real-time chat and Video meet backend built using **Spring Boot, MongoDB, Redis, and WebSocket** with **OTP authentication and email integration**.
 
-Deployed using **Docker on Render Cloud**.
+Deployed using **Docker on Render Cloud**. 
 
 ## Tech Stack
 
